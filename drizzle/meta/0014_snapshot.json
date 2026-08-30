@@ -1,0 +1,6215 @@
+{
+  "version": "5",
+  "dialect": "mysql",
+  "id": "99cfecc4-8b64-46e7-86b2-6649a3865f0c",
+  "prevId": "8f67f966-12da-4549-80ef-7e78e896b490",
+  "tables": {
+    "approvals": {
+      "name": "approvals",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "organizationId": {
+          "name": "organizationId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tradeId": {
+          "name": "tradeId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "exceptionId": {
+          "name": "exceptionId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "type": {
+          "name": "type",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "enum('pending','approved','rejected','expired')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "requestedBy": {
+          "name": "requestedBy",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "approverId": {
+          "name": "approverId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "decisionReason": {
+          "name": "decisionReason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "evidence": {
+          "name": "evidence",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "decidedAt": {
+          "name": "decidedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "approvals_trade_idx": {
+          "name": "approvals_trade_idx",
+          "columns": [
+            "tradeId"
+          ],
+          "isUnique": false
+        },
+        "approvals_status_idx": {
+          "name": "approvals_status_idx",
+          "columns": [
+            "status"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "approvals_organizationId_organizations_id_fk": {
+          "name": "approvals_organizationId_organizations_id_fk",
+          "tableFrom": "approvals",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organizationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "approvals_tradeId_trades_id_fk": {
+          "name": "approvals_tradeId_trades_id_fk",
+          "tableFrom": "approvals",
+          "tableTo": "trades",
+          "columnsFrom": [
+            "tradeId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "approvals_exceptionId_tradeExceptions_id_fk": {
+          "name": "approvals_exceptionId_tradeExceptions_id_fk",
+          "tableFrom": "approvals",
+          "tableTo": "tradeExceptions",
+          "columnsFrom": [
+            "exceptionId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "approvals_requestedBy_users_id_fk": {
+          "name": "approvals_requestedBy_users_id_fk",
+          "tableFrom": "approvals",
+          "tableTo": "users",
+          "columnsFrom": [
+            "requestedBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "approvals_approverId_users_id_fk": {
+          "name": "approvals_approverId_users_id_fk",
+          "tableFrom": "approvals",
+          "tableTo": "users",
+          "columnsFrom": [
+            "approverId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "approvals_id": {
+          "name": "approvals_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "auditRecords": {
+      "name": "auditRecords",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "organizationId": {
+          "name": "organizationId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "actorId": {
+          "name": "actorId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "action": {
+          "name": "action",
+          "type": "varchar(160)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "objectType": {
+          "name": "objectType",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "objectId": {
+          "name": "objectId",
+          "type": "varchar(160)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "beforeState": {
+          "name": "beforeState",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "afterState": {
+          "name": "afterState",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "source": {
+          "name": "source",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'application'"
+        },
+        "sourceIp": {
+          "name": "sourceIp",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "device": {
+          "name": "device",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "audit_records_org_idx": {
+          "name": "audit_records_org_idx",
+          "columns": [
+            "organizationId"
+          ],
+          "isUnique": false
+        },
+        "audit_records_object_idx": {
+          "name": "audit_records_object_idx",
+          "columns": [
+            "objectType",
+            "objectId"
+          ],
+          "isUnique": false
+        },
+        "audit_records_created_idx": {
+          "name": "audit_records_created_idx",
+          "columns": [
+            "createdAt"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "auditRecords_organizationId_organizations_id_fk": {
+          "name": "auditRecords_organizationId_organizations_id_fk",
+          "tableFrom": "auditRecords",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organizationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "auditRecords_actorId_users_id_fk": {
+          "name": "auditRecords_actorId_users_id_fk",
+          "tableFrom": "auditRecords",
+          "tableTo": "users",
+          "columnsFrom": [
+            "actorId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "auditRecords_id": {
+          "name": "auditRecords_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "canonicalResolutions": {
+      "name": "canonicalResolutions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "tradeId": {
+          "name": "tradeId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "fieldName": {
+          "name": "fieldName",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "selectedEvidenceFieldId": {
+          "name": "selectedEvidenceFieldId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "selectedValue": {
+          "name": "selectedValue",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "conflictingEvidenceFieldIds": {
+          "name": "conflictingEvidenceFieldIds",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "rationale": {
+          "name": "rationale",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "policyContext": {
+          "name": "policyContext",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "resolvedBy": {
+          "name": "resolvedBy",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "resolvedAt": {
+          "name": "resolvedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "previousResolutionId": {
+          "name": "previousResolutionId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "active": {
+          "name": "active",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        }
+      },
+      "indexes": {
+        "canonical_resolutions_trade_idx": {
+          "name": "canonical_resolutions_trade_idx",
+          "columns": [
+            "tradeId"
+          ],
+          "isUnique": false
+        },
+        "canonical_resolutions_field_idx": {
+          "name": "canonical_resolutions_field_idx",
+          "columns": [
+            "tradeId",
+            "fieldName"
+          ],
+          "isUnique": false
+        },
+        "canonical_resolutions_active_idx": {
+          "name": "canonical_resolutions_active_idx",
+          "columns": [
+            "active"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "canres_trade_fk": {
+          "name": "canres_trade_fk",
+          "tableFrom": "canonicalResolutions",
+          "tableTo": "trades",
+          "columnsFrom": [
+            "tradeId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "canres_evidence_fk": {
+          "name": "canres_evidence_fk",
+          "tableFrom": "canonicalResolutions",
+          "tableTo": "evidenceFields",
+          "columnsFrom": [
+            "selectedEvidenceFieldId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "canres_resolver_fk": {
+          "name": "canres_resolver_fk",
+          "tableFrom": "canonicalResolutions",
+          "tableTo": "users",
+          "columnsFrom": [
+            "resolvedBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "canonicalResolutions_id": {
+          "name": "canonicalResolutions_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "capabilityGrants": {
+      "name": "capabilityGrants",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "membershipId": {
+          "name": "membershipId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "capability": {
+          "name": "capability",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "grantedBy": {
+          "name": "grantedBy",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "capability_grant_unique_idx": {
+          "name": "capability_grant_unique_idx",
+          "columns": [
+            "membershipId",
+            "capability"
+          ],
+          "isUnique": true
+        },
+        "capability_grant_membership_idx": {
+          "name": "capability_grant_membership_idx",
+          "columns": [
+            "membershipId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "capabilityGrants_membershipId_memberships_id_fk": {
+          "name": "capabilityGrants_membershipId_memberships_id_fk",
+          "tableFrom": "capabilityGrants",
+          "tableTo": "memberships",
+          "columnsFrom": [
+            "membershipId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "capabilityGrants_grantedBy_users_id_fk": {
+          "name": "capabilityGrants_grantedBy_users_id_fk",
+          "tableFrom": "capabilityGrants",
+          "tableTo": "users",
+          "columnsFrom": [
+            "grantedBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "capabilityGrants_id": {
+          "name": "capabilityGrants_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "comments": {
+      "name": "comments",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "tradeId": {
+          "name": "tradeId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "exceptionId": {
+          "name": "exceptionId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "parentId": {
+          "name": "parentId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "authorId": {
+          "name": "authorId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "editedAt": {
+          "name": "editedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "comments_trade_idx": {
+          "name": "comments_trade_idx",
+          "columns": [
+            "tradeId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "comments_tradeId_trades_id_fk": {
+          "name": "comments_tradeId_trades_id_fk",
+          "tableFrom": "comments",
+          "tableTo": "trades",
+          "columnsFrom": [
+            "tradeId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "comments_exceptionId_tradeExceptions_id_fk": {
+          "name": "comments_exceptionId_tradeExceptions_id_fk",
+          "tableFrom": "comments",
+          "tableTo": "tradeExceptions",
+          "columnsFrom": [
+            "exceptionId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "comments_authorId_users_id_fk": {
+          "name": "comments_authorId_users_id_fk",
+          "tableFrom": "comments",
+          "tableTo": "users",
+          "columnsFrom": [
+            "authorId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "comments_id": {
+          "name": "comments_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "counterparties": {
+      "name": "counterparties",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "organizationId": {
+          "name": "organizationId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "legalName": {
+          "name": "legalName",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tradingNames": {
+          "name": "tradingNames",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "countryCode": {
+          "name": "countryCode",
+          "type": "varchar(2)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "taxId": {
+          "name": "taxId",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "addresses": {
+          "name": "addresses",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "contacts": {
+          "name": "contacts",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "bankDetails": {
+          "name": "bankDetails",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "defaultTerms": {
+          "name": "defaultTerms",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "documentPreferences": {
+          "name": "documentPreferences",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "requiredCertificates": {
+          "name": "requiredCertificates",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "enum('active','inactive','needs_review')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'active'"
+        },
+        "validFrom": {
+          "name": "validFrom",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "validTo": {
+          "name": "validTo",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "onUpdate": true,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "counterparties_org_idx": {
+          "name": "counterparties_org_idx",
+          "columns": [
+            "organizationId"
+          ],
+          "isUnique": false
+        },
+        "counterparties_legal_idx": {
+          "name": "counterparties_legal_idx",
+          "columns": [
+            "legalName"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "counterparties_organizationId_organizations_id_fk": {
+          "name": "counterparties_organizationId_organizations_id_fk",
+          "tableFrom": "counterparties",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organizationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "counterparties_id": {
+          "name": "counterparties_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "evidenceFields": {
+      "name": "evidenceFields",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "tradeId": {
+          "name": "tradeId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "documentId": {
+          "name": "documentId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "fieldName": {
+          "name": "fieldName",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "fieldValue": {
+          "name": "fieldValue",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "authority": {
+          "name": "authority",
+          "type": "enum('canonical','authoritative','supporting','conflicting')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'supporting'"
+        },
+        "confidence": {
+          "name": "confidence",
+          "type": "decimal(5,4)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sourceLocation": {
+          "name": "sourceLocation",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "modelVersion": {
+          "name": "modelVersion",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "extractedAt": {
+          "name": "extractedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "confirmedBy": {
+          "name": "confirmedBy",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "confirmedAt": {
+          "name": "confirmedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "validFrom": {
+          "name": "validFrom",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "validTo": {
+          "name": "validTo",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "evidence_fields_trade_idx": {
+          "name": "evidence_fields_trade_idx",
+          "columns": [
+            "tradeId"
+          ],
+          "isUnique": false
+        },
+        "evidence_fields_document_idx": {
+          "name": "evidence_fields_document_idx",
+          "columns": [
+            "documentId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "evidenceFields_tradeId_trades_id_fk": {
+          "name": "evidenceFields_tradeId_trades_id_fk",
+          "tableFrom": "evidenceFields",
+          "tableTo": "trades",
+          "columnsFrom": [
+            "tradeId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "evidenceFields_documentId_tradeDocuments_id_fk": {
+          "name": "evidenceFields_documentId_tradeDocuments_id_fk",
+          "tableFrom": "evidenceFields",
+          "tableTo": "tradeDocuments",
+          "columnsFrom": [
+            "documentId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "evidenceFields_confirmedBy_users_id_fk": {
+          "name": "evidenceFields_confirmedBy_users_id_fk",
+          "tableFrom": "evidenceFields",
+          "tableTo": "users",
+          "columnsFrom": [
+            "confirmedBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "evidenceFields_id": {
+          "name": "evidenceFields_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "externalReferences": {
+      "name": "externalReferences",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "organizationId": {
+          "name": "organizationId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tradeId": {
+          "name": "tradeId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "entityType": {
+          "name": "entityType",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "providerName": {
+          "name": "providerName",
+          "type": "varchar(180)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "externalId": {
+          "name": "externalId",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "payload": {
+          "name": "payload",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "observedAt": {
+          "name": "observedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "recordedAt": {
+          "name": "recordedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "external_reference_unique_idx": {
+          "name": "external_reference_unique_idx",
+          "columns": [
+            "organizationId",
+            "providerName",
+            "entityType",
+            "externalId"
+          ],
+          "isUnique": true
+        },
+        "external_reference_trade_idx": {
+          "name": "external_reference_trade_idx",
+          "columns": [
+            "tradeId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "externalReferences_organizationId_organizations_id_fk": {
+          "name": "externalReferences_organizationId_organizations_id_fk",
+          "tableFrom": "externalReferences",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organizationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "externalReferences_tradeId_trades_id_fk": {
+          "name": "externalReferences_tradeId_trades_id_fk",
+          "tableFrom": "externalReferences",
+          "tableTo": "trades",
+          "columnsFrom": [
+            "tradeId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "externalReferences_id": {
+          "name": "externalReferences_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "generatedDocuments": {
+      "name": "generatedDocuments",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "tradeId": {
+          "name": "tradeId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "documentType": {
+          "name": "documentType",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "templateVersion": {
+          "name": "templateVersion",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "enum('draft','issued','voided')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'draft'"
+        },
+        "dataSnapshot": {
+          "name": "dataSnapshot",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "renderedContent": {
+          "name": "renderedContent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "contentHash": {
+          "name": "contentHash",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "issuedBy": {
+          "name": "issuedBy",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "issuedAt": {
+          "name": "issuedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "generated_documents_trade_idx": {
+          "name": "generated_documents_trade_idx",
+          "columns": [
+            "tradeId"
+          ],
+          "isUnique": false
+        },
+        "generated_documents_status_idx": {
+          "name": "generated_documents_status_idx",
+          "columns": [
+            "status"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "generatedDocuments_tradeId_trades_id_fk": {
+          "name": "generatedDocuments_tradeId_trades_id_fk",
+          "tableFrom": "generatedDocuments",
+          "tableTo": "trades",
+          "columnsFrom": [
+            "tradeId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "generatedDocuments_issuedBy_users_id_fk": {
+          "name": "generatedDocuments_issuedBy_users_id_fk",
+          "tableFrom": "generatedDocuments",
+          "tableTo": "users",
+          "columnsFrom": [
+            "issuedBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "generatedDocuments_id": {
+          "name": "generatedDocuments_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "guestAccessGrants": {
+      "name": "guestAccessGrants",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "organizationId": {
+          "name": "organizationId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tradeId": {
+          "name": "tradeId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "recipientEmail": {
+          "name": "recipientEmail",
+          "type": "varchar(320)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tokenHash": {
+          "name": "tokenHash",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "scope": {
+          "name": "scope",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "enum('active','expired','revoked','completed')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'active'"
+        },
+        "expiresAt": {
+          "name": "expiresAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "accessedAt": {
+          "name": "accessedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdBy": {
+          "name": "createdBy",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "guest_access_trade_idx": {
+          "name": "guest_access_trade_idx",
+          "columns": [
+            "tradeId"
+          ],
+          "isUnique": false
+        },
+        "guest_access_org_idx": {
+          "name": "guest_access_org_idx",
+          "columns": [
+            "organizationId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "guestAccessGrants_organizationId_organizations_id_fk": {
+          "name": "guestAccessGrants_organizationId_organizations_id_fk",
+          "tableFrom": "guestAccessGrants",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organizationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "guestAccessGrants_tradeId_trades_id_fk": {
+          "name": "guestAccessGrants_tradeId_trades_id_fk",
+          "tableFrom": "guestAccessGrants",
+          "tableTo": "trades",
+          "columnsFrom": [
+            "tradeId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "guestAccessGrants_createdBy_users_id_fk": {
+          "name": "guestAccessGrants_createdBy_users_id_fk",
+          "tableFrom": "guestAccessGrants",
+          "tableTo": "users",
+          "columnsFrom": [
+            "createdBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "guestAccessGrants_id": {
+          "name": "guestAccessGrants_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {
+        "guestAccessGrants_tokenHash_unique": {
+          "name": "guestAccessGrants_tokenHash_unique",
+          "columns": [
+            "tokenHash"
+          ]
+        }
+      },
+      "checkConstraint": {}
+    },
+    "importMappings": {
+      "name": "importMappings",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "organizationId": {
+          "name": "organizationId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sourceName": {
+          "name": "sourceName",
+          "type": "varchar(180)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "entityType": {
+          "name": "entityType",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "mapping": {
+          "name": "mapping",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdBy": {
+          "name": "createdBy",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "onUpdate": true,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "import_mappings_org_idx": {
+          "name": "import_mappings_org_idx",
+          "columns": [
+            "organizationId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "importMappings_organizationId_organizations_id_fk": {
+          "name": "importMappings_organizationId_organizations_id_fk",
+          "tableFrom": "importMappings",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organizationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "importMappings_createdBy_users_id_fk": {
+          "name": "importMappings_createdBy_users_id_fk",
+          "tableFrom": "importMappings",
+          "tableTo": "users",
+          "columnsFrom": [
+            "createdBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "importMappings_id": {
+          "name": "importMappings_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "integrationRunAttempts": {
+      "name": "integrationRunAttempts",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "integrationRunId": {
+          "name": "integrationRunId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "attempt": {
+          "name": "attempt",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "enum('running','completed','failed','skipped')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "errorMessage": {
+          "name": "errorMessage",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "detail": {
+          "name": "detail",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "startedAt": {
+          "name": "startedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "completedAt": {
+          "name": "completedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "integration_attempt_unique_idx": {
+          "name": "integration_attempt_unique_idx",
+          "columns": [
+            "integrationRunId",
+            "attempt"
+          ],
+          "isUnique": true
+        },
+        "integration_attempt_run_idx": {
+          "name": "integration_attempt_run_idx",
+          "columns": [
+            "integrationRunId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "integrationRunAttempts_integrationRunId_integrationRuns_id_fk": {
+          "name": "integrationRunAttempts_integrationRunId_integrationRuns_id_fk",
+          "tableFrom": "integrationRunAttempts",
+          "tableTo": "integrationRuns",
+          "columnsFrom": [
+            "integrationRunId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "integrationRunAttempts_id": {
+          "name": "integrationRunAttempts_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "integrationRuns": {
+      "name": "integrationRuns",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "integrationId": {
+          "name": "integrationId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "runType": {
+          "name": "runType",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "enum('queued','running','completed','failed','skipped')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'queued'"
+        },
+        "inputSummary": {
+          "name": "inputSummary",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "outputSummary": {
+          "name": "outputSummary",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "errorMessage": {
+          "name": "errorMessage",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "startedAt": {
+          "name": "startedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "completedAt": {
+          "name": "completedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "integration_runs_integration_idx": {
+          "name": "integration_runs_integration_idx",
+          "columns": [
+            "integrationId"
+          ],
+          "isUnique": false
+        },
+        "integration_runs_status_idx": {
+          "name": "integration_runs_status_idx",
+          "columns": [
+            "status"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "integrationRuns_integrationId_integrations_id_fk": {
+          "name": "integrationRuns_integrationId_integrations_id_fk",
+          "tableFrom": "integrationRuns",
+          "tableTo": "integrations",
+          "columnsFrom": [
+            "integrationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "integrationRuns_id": {
+          "name": "integrationRuns_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "integrations": {
+      "name": "integrations",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "organizationId": {
+          "name": "organizationId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "providerType": {
+          "name": "providerType",
+          "type": "enum('email','storage','erp','carrier','visibility','ebl','compliance','payment','finance','identity')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "providerName": {
+          "name": "providerName",
+          "type": "varchar(180)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "enum('disconnected','connected','degraded','paused')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'disconnected'"
+        },
+        "configuration": {
+          "name": "configuration",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "healthMessage": {
+          "name": "healthMessage",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "lastSyncedAt": {
+          "name": "lastSyncedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdBy": {
+          "name": "createdBy",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "onUpdate": true,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "integrations_org_idx": {
+          "name": "integrations_org_idx",
+          "columns": [
+            "organizationId"
+          ],
+          "isUnique": false
+        },
+        "integrations_provider_idx": {
+          "name": "integrations_provider_idx",
+          "columns": [
+            "providerType"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "integrations_organizationId_organizations_id_fk": {
+          "name": "integrations_organizationId_organizations_id_fk",
+          "tableFrom": "integrations",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organizationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "integrations_createdBy_users_id_fk": {
+          "name": "integrations_createdBy_users_id_fk",
+          "tableFrom": "integrations",
+          "tableTo": "users",
+          "columnsFrom": [
+            "createdBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "integrations_id": {
+          "name": "integrations_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "memberships": {
+      "name": "memberships",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "organizationId": {
+          "name": "organizationId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "userId": {
+          "name": "userId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "role": {
+          "name": "role",
+          "type": "enum('trader','reviewer')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "membership_unique": {
+          "name": "membership_unique",
+          "columns": [
+            "organizationId",
+            "userId"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "memberships_organizationId_organizations_id_fk": {
+          "name": "memberships_organizationId_organizations_id_fk",
+          "tableFrom": "memberships",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organizationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "memberships_userId_users_id_fk": {
+          "name": "memberships_userId_users_id_fk",
+          "tableFrom": "memberships",
+          "tableTo": "users",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "memberships_id": {
+          "name": "memberships_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "obligationDependencies": {
+      "name": "obligationDependencies",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "obligationId": {
+          "name": "obligationId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "dependsOnObligationId": {
+          "name": "dependsOnObligationId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "dependencyType": {
+          "name": "dependencyType",
+          "type": "enum('blocks_release','blocks_task','evidence_prerequisite')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'blocks_release'"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "obligation_dependency_unique_idx": {
+          "name": "obligation_dependency_unique_idx",
+          "columns": [
+            "obligationId",
+            "dependsOnObligationId"
+          ],
+          "isUnique": true
+        },
+        "obligation_dependencies_obligation_idx": {
+          "name": "obligation_dependencies_obligation_idx",
+          "columns": [
+            "obligationId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "obligationDependencies_obligationId_tradeObligations_id_fk": {
+          "name": "obligationDependencies_obligationId_tradeObligations_id_fk",
+          "tableFrom": "obligationDependencies",
+          "tableTo": "tradeObligations",
+          "columnsFrom": [
+            "obligationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "obligationDependencies_dependsOnObligationId_tradeObligations_id_fk": {
+          "name": "obligationDependencies_dependsOnObligationId_tradeObligations_id_fk",
+          "tableFrom": "obligationDependencies",
+          "tableTo": "tradeObligations",
+          "columnsFrom": [
+            "dependsOnObligationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "obligationDependencies_id": {
+          "name": "obligationDependencies_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "obligationEscalations": {
+      "name": "obligationEscalations",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "obligationId": {
+          "name": "obligationId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "level": {
+          "name": "level",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "escalatedAt": {
+          "name": "escalatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "acknowledgedAt": {
+          "name": "acknowledgedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "escalatedBy": {
+          "name": "escalatedBy",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "obligation_escalations_obligation_idx": {
+          "name": "obligation_escalations_obligation_idx",
+          "columns": [
+            "obligationId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "obligationEscalations_obligationId_tradeObligations_id_fk": {
+          "name": "obligationEscalations_obligationId_tradeObligations_id_fk",
+          "tableFrom": "obligationEscalations",
+          "tableTo": "tradeObligations",
+          "columnsFrom": [
+            "obligationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "obligationEscalations_escalatedBy_users_id_fk": {
+          "name": "obligationEscalations_escalatedBy_users_id_fk",
+          "tableFrom": "obligationEscalations",
+          "tableTo": "users",
+          "columnsFrom": [
+            "escalatedBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "obligationEscalations_id": {
+          "name": "obligationEscalations_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "obligationTemplates": {
+      "name": "obligationTemplates",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "organizationId": {
+          "name": "organizationId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(180)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "actor": {
+          "name": "actor",
+          "type": "varchar(180)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "action": {
+          "name": "action",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "evidenceRequirement": {
+          "name": "evidenceRequirement",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "criticality": {
+          "name": "criticality",
+          "type": "enum('critical','warning','information')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'information'"
+        },
+        "dueOffsetHours": {
+          "name": "dueOffsetHours",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "releaseCondition": {
+          "name": "releaseCondition",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "active": {
+          "name": "active",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "createdBy": {
+          "name": "createdBy",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "obligation_templates_org_idx": {
+          "name": "obligation_templates_org_idx",
+          "columns": [
+            "organizationId"
+          ],
+          "isUnique": false
+        },
+        "obligation_templates_active_idx": {
+          "name": "obligation_templates_active_idx",
+          "columns": [
+            "active"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "obligationTemplates_organizationId_organizations_id_fk": {
+          "name": "obligationTemplates_organizationId_organizations_id_fk",
+          "tableFrom": "obligationTemplates",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organizationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "obligationTemplates_createdBy_users_id_fk": {
+          "name": "obligationTemplates_createdBy_users_id_fk",
+          "tableFrom": "obligationTemplates",
+          "tableTo": "users",
+          "columnsFrom": [
+            "createdBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "obligationTemplates_id": {
+          "name": "obligationTemplates_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "organizationControls": {
+      "name": "organizationControls",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "organizationId": {
+          "name": "organizationId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "dataRetentionDays": {
+          "name": "dataRetentionDays",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 2555
+        },
+        "allowedAiProviders": {
+          "name": "allowedAiProviders",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "regionalProcessing": {
+          "name": "regionalProcessing",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": "'default'"
+        },
+        "piiRedaction": {
+          "name": "piiRedaction",
+          "type": "enum('off','on_upload','on_model_request')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'on_model_request'"
+        },
+        "publicModelTraining": {
+          "name": "publicModelTraining",
+          "type": "enum('disallowed','allowed')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'disallowed'"
+        },
+        "requireMfa": {
+          "name": "requireMfa",
+          "type": "enum('disabled','required')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'disabled'"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "onUpdate": true,
+          "default": "(now())"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "organizationControls_organizationId_organizations_id_fk": {
+          "name": "organizationControls_organizationId_organizations_id_fk",
+          "tableFrom": "organizationControls",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organizationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "organizationControls_id": {
+          "name": "organizationControls_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {
+        "organizationControls_organizationId_unique": {
+          "name": "organizationControls_organizationId_unique",
+          "columns": [
+            "organizationId"
+          ]
+        }
+      },
+      "checkConstraint": {}
+    },
+    "organizations": {
+      "name": "organizations",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(180)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "slug": {
+          "name": "slug",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "organizations_id": {
+          "name": "organizations_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {
+        "organizations_slug_unique": {
+          "name": "organizations_slug_unique",
+          "columns": [
+            "slug"
+          ]
+        }
+      },
+      "checkConstraint": {}
+    },
+    "partnerRequests": {
+      "name": "partnerRequests",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "tradeId": {
+          "name": "tradeId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "requestedBy": {
+          "name": "requestedBy",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "recipientEmail": {
+          "name": "recipientEmail",
+          "type": "varchar(320)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "requestType": {
+          "name": "requestType",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "message": {
+          "name": "message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "enum('sent','completed','cancelled')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'sent'"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "completedAt": {
+          "name": "completedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "partner_requests_trade_idx": {
+          "name": "partner_requests_trade_idx",
+          "columns": [
+            "tradeId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "partnerRequests_tradeId_trades_id_fk": {
+          "name": "partnerRequests_tradeId_trades_id_fk",
+          "tableFrom": "partnerRequests",
+          "tableTo": "trades",
+          "columnsFrom": [
+            "tradeId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "partnerRequests_requestedBy_users_id_fk": {
+          "name": "partnerRequests_requestedBy_users_id_fk",
+          "tableFrom": "partnerRequests",
+          "tableTo": "users",
+          "columnsFrom": [
+            "requestedBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "partnerRequests_id": {
+          "name": "partnerRequests_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "paymentRecords": {
+      "name": "paymentRecords",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "tradeId": {
+          "name": "tradeId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "paymentTermId": {
+          "name": "paymentTermId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "amount": {
+          "name": "amount",
+          "type": "decimal(18,2)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "currency": {
+          "name": "currency",
+          "type": "varchar(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "enum('expected','received','overdue','disputed')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'expected'"
+        },
+        "evidenceDocumentId": {
+          "name": "evidenceDocumentId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "recordedAt": {
+          "name": "recordedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "payment_records_trade_idx": {
+          "name": "payment_records_trade_idx",
+          "columns": [
+            "tradeId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "paymentRecords_tradeId_trades_id_fk": {
+          "name": "paymentRecords_tradeId_trades_id_fk",
+          "tableFrom": "paymentRecords",
+          "tableTo": "trades",
+          "columnsFrom": [
+            "tradeId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "paymentRecords_paymentTermId_paymentTerms_id_fk": {
+          "name": "paymentRecords_paymentTermId_paymentTerms_id_fk",
+          "tableFrom": "paymentRecords",
+          "tableTo": "paymentTerms",
+          "columnsFrom": [
+            "paymentTermId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "paymentRecords_evidenceDocumentId_tradeDocuments_id_fk": {
+          "name": "paymentRecords_evidenceDocumentId_tradeDocuments_id_fk",
+          "tableFrom": "paymentRecords",
+          "tableTo": "tradeDocuments",
+          "columnsFrom": [
+            "evidenceDocumentId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "paymentRecords_id": {
+          "name": "paymentRecords_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "paymentTerms": {
+      "name": "paymentTerms",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "tradeId": {
+          "name": "tradeId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "method": {
+          "name": "method",
+          "type": "enum('open_account','advance','letter_of_credit','documentary_collection','other')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "depositPercent": {
+          "name": "depositPercent",
+          "type": "decimal(5,2)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "presentationDays": {
+          "name": "presentationDays",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "latestShipmentDate": {
+          "name": "latestShipmentDate",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "dueDate": {
+          "name": "dueDate",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "lcReference": {
+          "name": "lcReference",
+          "type": "varchar(160)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "specialClauses": {
+          "name": "specialClauses",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "onUpdate": true,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "payment_terms_trade_idx": {
+          "name": "payment_terms_trade_idx",
+          "columns": [
+            "tradeId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "paymentTerms_tradeId_trades_id_fk": {
+          "name": "paymentTerms_tradeId_trades_id_fk",
+          "tableFrom": "paymentTerms",
+          "tableTo": "trades",
+          "columnsFrom": [
+            "tradeId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "paymentTerms_id": {
+          "name": "paymentTerms_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "policyPacks": {
+      "name": "policyPacks",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "organizationId": {
+          "name": "organizationId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(180)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "scope": {
+          "name": "scope",
+          "type": "enum('company','counterparty','product','route','payment','transport','jurisdiction')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "enum('draft','active','retired')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'draft'"
+        },
+        "ownerId": {
+          "name": "ownerId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "onUpdate": true,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "policy_packs_org_idx": {
+          "name": "policy_packs_org_idx",
+          "columns": [
+            "organizationId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "policyPacks_organizationId_organizations_id_fk": {
+          "name": "policyPacks_organizationId_organizations_id_fk",
+          "tableFrom": "policyPacks",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organizationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "policyPacks_ownerId_users_id_fk": {
+          "name": "policyPacks_ownerId_users_id_fk",
+          "tableFrom": "policyPacks",
+          "tableTo": "users",
+          "columnsFrom": [
+            "ownerId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "policyPacks_id": {
+          "name": "policyPacks_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "policyVersions": {
+      "name": "policyVersions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "policyPackId": {
+          "name": "policyPackId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "version": {
+          "name": "version",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "rules": {
+          "name": "rules",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "effectiveFrom": {
+          "name": "effectiveFrom",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "effectiveTo": {
+          "name": "effectiveTo",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "source": {
+          "name": "source",
+          "type": "varchar(180)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "jurisdiction": {
+          "name": "jurisdiction",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdBy": {
+          "name": "createdBy",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "policy_version_idx": {
+          "name": "policy_version_idx",
+          "columns": [
+            "policyPackId",
+            "version"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "policyVersions_policyPackId_policyPacks_id_fk": {
+          "name": "policyVersions_policyPackId_policyPacks_id_fk",
+          "tableFrom": "policyVersions",
+          "tableTo": "policyPacks",
+          "columnsFrom": [
+            "policyPackId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "policyVersions_createdBy_users_id_fk": {
+          "name": "policyVersions_createdBy_users_id_fk",
+          "tableFrom": "policyVersions",
+          "tableTo": "users",
+          "columnsFrom": [
+            "createdBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "policyVersions_id": {
+          "name": "policyVersions_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "preflightRuns": {
+      "name": "preflightRuns",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "tradeId": {
+          "name": "tradeId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "gate": {
+          "name": "gate",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "enum('ready','ready_with_warnings','at_risk','blocked','insufficient_data')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "checks": {
+          "name": "checks",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "policySnapshot": {
+          "name": "policySnapshot",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "evidenceSnapshot": {
+          "name": "evidenceSnapshot",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "runBy": {
+          "name": "runBy",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "preflight_runs_trade_idx": {
+          "name": "preflight_runs_trade_idx",
+          "columns": [
+            "tradeId"
+          ],
+          "isUnique": false
+        },
+        "preflight_runs_gate_idx": {
+          "name": "preflight_runs_gate_idx",
+          "columns": [
+            "gate"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "preflightRuns_tradeId_trades_id_fk": {
+          "name": "preflightRuns_tradeId_trades_id_fk",
+          "tableFrom": "preflightRuns",
+          "tableTo": "trades",
+          "columnsFrom": [
+            "tradeId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "preflightRuns_runBy_users_id_fk": {
+          "name": "preflightRuns_runBy_users_id_fk",
+          "tableFrom": "preflightRuns",
+          "tableTo": "users",
+          "columnsFrom": [
+            "runBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "preflightRuns_id": {
+          "name": "preflightRuns_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "preflightWaivers": {
+      "name": "preflightWaivers",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "tradeId": {
+          "name": "tradeId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "policyVersionId": {
+          "name": "policyVersionId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "ruleKey": {
+          "name": "ruleKey",
+          "type": "varchar(160)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "decision": {
+          "name": "decision",
+          "type": "enum('active','expired','revoked')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'active'"
+        },
+        "expiresAt": {
+          "name": "expiresAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "approvedBy": {
+          "name": "approvedBy",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "approvedAt": {
+          "name": "approvedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "preflight_waivers_trade_idx": {
+          "name": "preflight_waivers_trade_idx",
+          "columns": [
+            "tradeId"
+          ],
+          "isUnique": false
+        },
+        "preflight_waivers_policy_idx": {
+          "name": "preflight_waivers_policy_idx",
+          "columns": [
+            "policyVersionId"
+          ],
+          "isUnique": false
+        },
+        "preflight_waivers_decision_idx": {
+          "name": "preflight_waivers_decision_idx",
+          "columns": [
+            "decision"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "preflightWaivers_tradeId_trades_id_fk": {
+          "name": "preflightWaivers_tradeId_trades_id_fk",
+          "tableFrom": "preflightWaivers",
+          "tableTo": "trades",
+          "columnsFrom": [
+            "tradeId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "preflightWaivers_policyVersionId_policyVersions_id_fk": {
+          "name": "preflightWaivers_policyVersionId_policyVersions_id_fk",
+          "tableFrom": "preflightWaivers",
+          "tableTo": "policyVersions",
+          "columnsFrom": [
+            "policyVersionId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "preflightWaivers_approvedBy_users_id_fk": {
+          "name": "preflightWaivers_approvedBy_users_id_fk",
+          "tableFrom": "preflightWaivers",
+          "tableTo": "users",
+          "columnsFrom": [
+            "approvedBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "preflightWaivers_id": {
+          "name": "preflightWaivers_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "products": {
+      "name": "products",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "organizationId": {
+          "name": "organizationId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sku": {
+          "name": "sku",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "buyerSku": {
+          "name": "buyerSku",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "variants": {
+          "name": "variants",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "countryOfOrigin": {
+          "name": "countryOfOrigin",
+          "type": "varchar(2)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "hsClassification": {
+          "name": "hsClassification",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "dimensions": {
+          "name": "dimensions",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "netWeight": {
+          "name": "netWeight",
+          "type": "decimal(14,3)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "grossWeight": {
+          "name": "grossWeight",
+          "type": "decimal(14,3)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "packing": {
+          "name": "packing",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "leadTimeDays": {
+          "name": "leadTimeDays",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "certifications": {
+          "name": "certifications",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "complianceAttributes": {
+          "name": "complianceAttributes",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "version": {
+          "name": "version",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "validFrom": {
+          "name": "validFrom",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "validTo": {
+          "name": "validTo",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "onUpdate": true,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "product_org_sku_idx": {
+          "name": "product_org_sku_idx",
+          "columns": [
+            "organizationId",
+            "sku",
+            "version"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "products_organizationId_organizations_id_fk": {
+          "name": "products_organizationId_organizations_id_fk",
+          "tableFrom": "products",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organizationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "products_id": {
+          "name": "products_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "shipmentAllocations": {
+      "name": "shipmentAllocations",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "shipmentId": {
+          "name": "shipmentId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tradeId": {
+          "name": "tradeId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "allocatedQuantity": {
+          "name": "allocatedQuantity",
+          "type": "decimal(18,3)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "allocatedValue": {
+          "name": "allocatedValue",
+          "type": "decimal(18,2)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "shipment_allocations_trade_idx": {
+          "name": "shipment_allocations_trade_idx",
+          "columns": [
+            "tradeId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "shipmentAllocations_shipmentId_shipments_id_fk": {
+          "name": "shipmentAllocations_shipmentId_shipments_id_fk",
+          "tableFrom": "shipmentAllocations",
+          "tableTo": "shipments",
+          "columnsFrom": [
+            "shipmentId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "shipmentAllocations_tradeId_trades_id_fk": {
+          "name": "shipmentAllocations_tradeId_trades_id_fk",
+          "tableFrom": "shipmentAllocations",
+          "tableTo": "trades",
+          "columnsFrom": [
+            "tradeId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "shipmentAllocations_id": {
+          "name": "shipmentAllocations_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "shipmentEvents": {
+      "name": "shipmentEvents",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "shipmentId": {
+          "name": "shipmentId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "eventType": {
+          "name": "eventType",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "location": {
+          "name": "location",
+          "type": "varchar(180)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "plannedAt": {
+          "name": "plannedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "actualAt": {
+          "name": "actualAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "source": {
+          "name": "source",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'manual'"
+        },
+        "rawPayload": {
+          "name": "rawPayload",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "shipment_events_shipment_idx": {
+          "name": "shipment_events_shipment_idx",
+          "columns": [
+            "shipmentId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "shipmentEvents_shipmentId_shipments_id_fk": {
+          "name": "shipmentEvents_shipmentId_shipments_id_fk",
+          "tableFrom": "shipmentEvents",
+          "tableTo": "shipments",
+          "columnsFrom": [
+            "shipmentId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "shipmentEvents_id": {
+          "name": "shipmentEvents_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "shipments": {
+      "name": "shipments",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "organizationId": {
+          "name": "organizationId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "mode": {
+          "name": "mode",
+          "type": "enum('sea','air','road','rail','multimodal')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "carrier": {
+          "name": "carrier",
+          "type": "varchar(180)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "forwarder": {
+          "name": "forwarder",
+          "type": "varchar(180)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "bookingReference": {
+          "name": "bookingReference",
+          "type": "varchar(160)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "containerReferences": {
+          "name": "containerReferences",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "origin": {
+          "name": "origin",
+          "type": "varchar(180)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "destination": {
+          "name": "destination",
+          "type": "varchar(180)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "etd": {
+          "name": "etd",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "eta": {
+          "name": "eta",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "vessel": {
+          "name": "vessel",
+          "type": "varchar(180)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "voyage": {
+          "name": "voyage",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "cutoffs": {
+          "name": "cutoffs",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "enum('planned','booked','in_transit','delivered','cancelled')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'planned'"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "onUpdate": true,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "shipments_org_idx": {
+          "name": "shipments_org_idx",
+          "columns": [
+            "organizationId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "shipments_organizationId_organizations_id_fk": {
+          "name": "shipments_organizationId_organizations_id_fk",
+          "tableFrom": "shipments",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organizationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "shipments_id": {
+          "name": "shipments_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "sourceIngestionReceipts": {
+      "name": "sourceIngestionReceipts",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "organizationId": {
+          "name": "organizationId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tradeId": {
+          "name": "tradeId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "integrationId": {
+          "name": "integrationId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sourceType": {
+          "name": "sourceType",
+          "type": "enum('email_attachment','structured_file','webhook')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "fileName": {
+          "name": "fileName",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "fileKey": {
+          "name": "fileKey",
+          "type": "varchar(512)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "fileUrl": {
+          "name": "fileUrl",
+          "type": "varchar(1024)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "mimeType": {
+          "name": "mimeType",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "payloadHash": {
+          "name": "payloadHash",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "rawPayload": {
+          "name": "rawPayload",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "normalizedStatus": {
+          "name": "normalizedStatus",
+          "type": "enum('queued','normalized','failed','replayed')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'queued'"
+        },
+        "errorMessage": {
+          "name": "errorMessage",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "replayCount": {
+          "name": "replayCount",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "receivedAt": {
+          "name": "receivedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "normalizedAt": {
+          "name": "normalizedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdBy": {
+          "name": "createdBy",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "source_receipts_org_idx": {
+          "name": "source_receipts_org_idx",
+          "columns": [
+            "organizationId"
+          ],
+          "isUnique": false
+        },
+        "source_receipts_trade_idx": {
+          "name": "source_receipts_trade_idx",
+          "columns": [
+            "tradeId"
+          ],
+          "isUnique": false
+        },
+        "source_receipts_status_idx": {
+          "name": "source_receipts_status_idx",
+          "columns": [
+            "normalizedStatus"
+          ],
+          "isUnique": false
+        },
+        "source_receipts_hash_idx": {
+          "name": "source_receipts_hash_idx",
+          "columns": [
+            "payloadHash"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "sourceIngestionReceipts_organizationId_organizations_id_fk": {
+          "name": "sourceIngestionReceipts_organizationId_organizations_id_fk",
+          "tableFrom": "sourceIngestionReceipts",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organizationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "sourceIngestionReceipts_tradeId_trades_id_fk": {
+          "name": "sourceIngestionReceipts_tradeId_trades_id_fk",
+          "tableFrom": "sourceIngestionReceipts",
+          "tableTo": "trades",
+          "columnsFrom": [
+            "tradeId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "sourceIngestionReceipts_integrationId_integrations_id_fk": {
+          "name": "sourceIngestionReceipts_integrationId_integrations_id_fk",
+          "tableFrom": "sourceIngestionReceipts",
+          "tableTo": "integrations",
+          "columnsFrom": [
+            "integrationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "sourceIngestionReceipts_createdBy_users_id_fk": {
+          "name": "sourceIngestionReceipts_createdBy_users_id_fk",
+          "tableFrom": "sourceIngestionReceipts",
+          "tableTo": "users",
+          "columnsFrom": [
+            "createdBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "sourceIngestionReceipts_id": {
+          "name": "sourceIngestionReceipts_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "tradeDocumentVersions": {
+      "name": "tradeDocumentVersions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "documentId": {
+          "name": "documentId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tradeId": {
+          "name": "tradeId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "version": {
+          "name": "version",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "fileName": {
+          "name": "fileName",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "fileKey": {
+          "name": "fileKey",
+          "type": "varchar(512)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "fileUrl": {
+          "name": "fileUrl",
+          "type": "varchar(1024)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "mimeType": {
+          "name": "mimeType",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "extractedData": {
+          "name": "extractedData",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "inconsistencies": {
+          "name": "inconsistencies",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "source": {
+          "name": "source",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'user_upload'"
+        },
+        "supersededBy": {
+          "name": "supersededBy",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "document_version_idx": {
+          "name": "document_version_idx",
+          "columns": [
+            "documentId",
+            "version"
+          ],
+          "isUnique": true
+        },
+        "document_versions_trade_idx": {
+          "name": "document_versions_trade_idx",
+          "columns": [
+            "tradeId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "tradeDocumentVersions_documentId_tradeDocuments_id_fk": {
+          "name": "tradeDocumentVersions_documentId_tradeDocuments_id_fk",
+          "tableFrom": "tradeDocumentVersions",
+          "tableTo": "tradeDocuments",
+          "columnsFrom": [
+            "documentId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "tradeDocumentVersions_tradeId_trades_id_fk": {
+          "name": "tradeDocumentVersions_tradeId_trades_id_fk",
+          "tableFrom": "tradeDocumentVersions",
+          "tableTo": "trades",
+          "columnsFrom": [
+            "tradeId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "tradeDocumentVersions_supersededBy_users_id_fk": {
+          "name": "tradeDocumentVersions_supersededBy_users_id_fk",
+          "tableFrom": "tradeDocumentVersions",
+          "tableTo": "users",
+          "columnsFrom": [
+            "supersededBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "tradeDocumentVersions_id": {
+          "name": "tradeDocumentVersions_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "tradeDocuments": {
+      "name": "tradeDocuments",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "tradeId": {
+          "name": "tradeId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "documentType": {
+          "name": "documentType",
+          "type": "enum('commercial invoice','packing list','bill of lading','certificate of origin','inspection certificate','LC/payment terms')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "enum('pending','uploaded','under review','verified','rejected')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "fileName": {
+          "name": "fileName",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "fileKey": {
+          "name": "fileKey",
+          "type": "varchar(512)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "fileUrl": {
+          "name": "fileUrl",
+          "type": "varchar(1024)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "mimeType": {
+          "name": "mimeType",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "extractedData": {
+          "name": "extractedData",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "inconsistencies": {
+          "name": "inconsistencies",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "reviewerNotes": {
+          "name": "reviewerNotes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "uploadedBy": {
+          "name": "uploadedBy",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "reviewedBy": {
+          "name": "reviewedBy",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "uploadedAt": {
+          "name": "uploadedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "reviewedAt": {
+          "name": "reviewedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "onUpdate": true,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "trade_document_type_idx": {
+          "name": "trade_document_type_idx",
+          "columns": [
+            "tradeId",
+            "documentType"
+          ],
+          "isUnique": true
+        },
+        "trade_documents_status_idx": {
+          "name": "trade_documents_status_idx",
+          "columns": [
+            "status"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "tradeDocuments_tradeId_trades_id_fk": {
+          "name": "tradeDocuments_tradeId_trades_id_fk",
+          "tableFrom": "tradeDocuments",
+          "tableTo": "trades",
+          "columnsFrom": [
+            "tradeId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "tradeDocuments_uploadedBy_users_id_fk": {
+          "name": "tradeDocuments_uploadedBy_users_id_fk",
+          "tableFrom": "tradeDocuments",
+          "tableTo": "users",
+          "columnsFrom": [
+            "uploadedBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "tradeDocuments_reviewedBy_users_id_fk": {
+          "name": "tradeDocuments_reviewedBy_users_id_fk",
+          "tableFrom": "tradeDocuments",
+          "tableTo": "users",
+          "columnsFrom": [
+            "reviewedBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "tradeDocuments_id": {
+          "name": "tradeDocuments_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "tradeEvents": {
+      "name": "tradeEvents",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "tradeId": {
+          "name": "tradeId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "actorId": {
+          "name": "actorId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "eventType": {
+          "name": "eventType",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "title": {
+          "name": "title",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "detail": {
+          "name": "detail",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "source": {
+          "name": "source",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'application'"
+        },
+        "beforeState": {
+          "name": "beforeState",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "afterState": {
+          "name": "afterState",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "trade_events_trade_idx": {
+          "name": "trade_events_trade_idx",
+          "columns": [
+            "tradeId"
+          ],
+          "isUnique": false
+        },
+        "trade_events_created_idx": {
+          "name": "trade_events_created_idx",
+          "columns": [
+            "createdAt"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "tradeEvents_tradeId_trades_id_fk": {
+          "name": "tradeEvents_tradeId_trades_id_fk",
+          "tableFrom": "tradeEvents",
+          "tableTo": "trades",
+          "columnsFrom": [
+            "tradeId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "tradeEvents_actorId_users_id_fk": {
+          "name": "tradeEvents_actorId_users_id_fk",
+          "tableFrom": "tradeEvents",
+          "tableTo": "users",
+          "columnsFrom": [
+            "actorId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "tradeEvents_id": {
+          "name": "tradeEvents_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "tradeExceptions": {
+      "name": "tradeExceptions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "tradeId": {
+          "name": "tradeId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "documentId": {
+          "name": "documentId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "category": {
+          "name": "category",
+          "type": "enum('commercial','documentation','execution','logistics','settlement','compliance')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "severity": {
+          "name": "severity",
+          "type": "enum('critical','warning','information')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "enum('open','resolved')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'open'"
+        },
+        "title": {
+          "name": "title",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "detail": {
+          "name": "detail",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "resolutionOutcome": {
+          "name": "resolutionOutcome",
+          "type": "enum('corrected','accepted_with_waiver','rejected_source','duplicate','not_actionable')",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "resolutionRationale": {
+          "name": "resolutionRationale",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "resolvedBy": {
+          "name": "resolvedBy",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "resolvedAt": {
+          "name": "resolvedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "trade_exceptions_trade_idx": {
+          "name": "trade_exceptions_trade_idx",
+          "columns": [
+            "tradeId"
+          ],
+          "isUnique": false
+        },
+        "trade_exceptions_status_idx": {
+          "name": "trade_exceptions_status_idx",
+          "columns": [
+            "status"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "tradeExceptions_tradeId_trades_id_fk": {
+          "name": "tradeExceptions_tradeId_trades_id_fk",
+          "tableFrom": "tradeExceptions",
+          "tableTo": "trades",
+          "columnsFrom": [
+            "tradeId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "tradeExceptions_documentId_tradeDocuments_id_fk": {
+          "name": "tradeExceptions_documentId_tradeDocuments_id_fk",
+          "tableFrom": "tradeExceptions",
+          "tableTo": "tradeDocuments",
+          "columnsFrom": [
+            "documentId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "tradeExceptions_resolvedBy_users_id_fk": {
+          "name": "tradeExceptions_resolvedBy_users_id_fk",
+          "tableFrom": "tradeExceptions",
+          "tableTo": "users",
+          "columnsFrom": [
+            "resolvedBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "tradeExceptions_id": {
+          "name": "tradeExceptions_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "tradeLines": {
+      "name": "tradeLines",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "tradeId": {
+          "name": "tradeId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "productId": {
+          "name": "productId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sequence": {
+          "name": "sequence",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sku": {
+          "name": "sku",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "decimal(18,3)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "unit": {
+          "name": "unit",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "unitPrice": {
+          "name": "unitPrice",
+          "type": "decimal(18,4)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "totalValue": {
+          "name": "totalValue",
+          "type": "decimal(18,2)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "source": {
+          "name": "source",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'canonical'"
+        },
+        "validFrom": {
+          "name": "validFrom",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "validTo": {
+          "name": "validTo",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "trade_lines_trade_idx": {
+          "name": "trade_lines_trade_idx",
+          "columns": [
+            "tradeId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "tradeLines_tradeId_trades_id_fk": {
+          "name": "tradeLines_tradeId_trades_id_fk",
+          "tableFrom": "tradeLines",
+          "tableTo": "trades",
+          "columnsFrom": [
+            "tradeId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "tradeLines_productId_products_id_fk": {
+          "name": "tradeLines_productId_products_id_fk",
+          "tableFrom": "tradeLines",
+          "tableTo": "products",
+          "columnsFrom": [
+            "productId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "tradeLines_id": {
+          "name": "tradeLines_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "tradeMessages": {
+      "name": "tradeMessages",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "tradeId": {
+          "name": "tradeId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sender": {
+          "name": "sender",
+          "type": "varchar(320)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "subject": {
+          "name": "subject",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source": {
+          "name": "source",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'email'"
+        },
+        "receivedAt": {
+          "name": "receivedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ingestedBy": {
+          "name": "ingestedBy",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "trade_messages_trade_idx": {
+          "name": "trade_messages_trade_idx",
+          "columns": [
+            "tradeId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "tradeMessages_tradeId_trades_id_fk": {
+          "name": "tradeMessages_tradeId_trades_id_fk",
+          "tableFrom": "tradeMessages",
+          "tableTo": "trades",
+          "columnsFrom": [
+            "tradeId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "tradeMessages_ingestedBy_users_id_fk": {
+          "name": "tradeMessages_ingestedBy_users_id_fk",
+          "tableFrom": "tradeMessages",
+          "tableTo": "users",
+          "columnsFrom": [
+            "ingestedBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "tradeMessages_id": {
+          "name": "tradeMessages_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "tradeObligations": {
+      "name": "tradeObligations",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "tradeId": {
+          "name": "tradeId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "actor": {
+          "name": "actor",
+          "type": "varchar(180)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "action": {
+          "name": "action",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "evidenceRequirement": {
+          "name": "evidenceRequirement",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "deadline": {
+          "name": "deadline",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "criticality": {
+          "name": "criticality",
+          "type": "enum('critical','warning','information')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'information'"
+        },
+        "status": {
+          "name": "status",
+          "type": "enum('open','fulfilled','overdue')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'open'"
+        },
+        "source": {
+          "name": "source",
+          "type": "varchar(180)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "onUpdate": true,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "trade_obligations_trade_idx": {
+          "name": "trade_obligations_trade_idx",
+          "columns": [
+            "tradeId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "tradeObligations_tradeId_trades_id_fk": {
+          "name": "tradeObligations_tradeId_trades_id_fk",
+          "tableFrom": "tradeObligations",
+          "tableTo": "trades",
+          "columnsFrom": [
+            "tradeId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "tradeObligations_id": {
+          "name": "tradeObligations_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "tradeRevisions": {
+      "name": "tradeRevisions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "tradeId": {
+          "name": "tradeId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "version": {
+          "name": "version",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "beforeState": {
+          "name": "beforeState",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "afterState": {
+          "name": "afterState",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source": {
+          "name": "source",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "observedAt": {
+          "name": "observedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "recordedAt": {
+          "name": "recordedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "recordedBy": {
+          "name": "recordedBy",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "trade_revision_idx": {
+          "name": "trade_revision_idx",
+          "columns": [
+            "tradeId",
+            "version"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "tradeRevisions_tradeId_trades_id_fk": {
+          "name": "tradeRevisions_tradeId_trades_id_fk",
+          "tableFrom": "tradeRevisions",
+          "tableTo": "trades",
+          "columnsFrom": [
+            "tradeId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "tradeRevisions_recordedBy_users_id_fk": {
+          "name": "tradeRevisions_recordedBy_users_id_fk",
+          "tableFrom": "tradeRevisions",
+          "tableTo": "users",
+          "columnsFrom": [
+            "recordedBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "tradeRevisions_id": {
+          "name": "tradeRevisions_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "tradeTasks": {
+      "name": "tradeTasks",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "organizationId": {
+          "name": "organizationId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tradeId": {
+          "name": "tradeId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "exceptionId": {
+          "name": "exceptionId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "obligationId": {
+          "name": "obligationId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "title": {
+          "name": "title",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "detail": {
+          "name": "detail",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "assigneeId": {
+          "name": "assigneeId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "deadline": {
+          "name": "deadline",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "enum('open','in_progress','completed','cancelled')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'open'"
+        },
+        "completedAt": {
+          "name": "completedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdBy": {
+          "name": "createdBy",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "onUpdate": true,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "trade_tasks_trade_idx": {
+          "name": "trade_tasks_trade_idx",
+          "columns": [
+            "tradeId"
+          ],
+          "isUnique": false
+        },
+        "trade_tasks_assignee_idx": {
+          "name": "trade_tasks_assignee_idx",
+          "columns": [
+            "assigneeId"
+          ],
+          "isUnique": false
+        },
+        "trade_tasks_status_idx": {
+          "name": "trade_tasks_status_idx",
+          "columns": [
+            "status"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "tradeTasks_organizationId_organizations_id_fk": {
+          "name": "tradeTasks_organizationId_organizations_id_fk",
+          "tableFrom": "tradeTasks",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organizationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "tradeTasks_tradeId_trades_id_fk": {
+          "name": "tradeTasks_tradeId_trades_id_fk",
+          "tableFrom": "tradeTasks",
+          "tableTo": "trades",
+          "columnsFrom": [
+            "tradeId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "tradeTasks_exceptionId_tradeExceptions_id_fk": {
+          "name": "tradeTasks_exceptionId_tradeExceptions_id_fk",
+          "tableFrom": "tradeTasks",
+          "tableTo": "tradeExceptions",
+          "columnsFrom": [
+            "exceptionId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "tradeTasks_obligationId_tradeObligations_id_fk": {
+          "name": "tradeTasks_obligationId_tradeObligations_id_fk",
+          "tableFrom": "tradeTasks",
+          "tableTo": "tradeObligations",
+          "columnsFrom": [
+            "obligationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "tradeTasks_assigneeId_users_id_fk": {
+          "name": "tradeTasks_assigneeId_users_id_fk",
+          "tableFrom": "tradeTasks",
+          "tableTo": "users",
+          "columnsFrom": [
+            "assigneeId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "tradeTasks_createdBy_users_id_fk": {
+          "name": "tradeTasks_createdBy_users_id_fk",
+          "tableFrom": "tradeTasks",
+          "tableTo": "users",
+          "columnsFrom": [
+            "createdBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "tradeTasks_id": {
+          "name": "tradeTasks_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "trades": {
+      "name": "trades",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "reference": {
+          "name": "reference",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organizationId": {
+          "name": "organizationId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "ownerId": {
+          "name": "ownerId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "buyerName": {
+          "name": "buyerName",
+          "type": "varchar(180)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "buyerCountry": {
+          "name": "buyerCountry",
+          "type": "varchar(2)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sellerName": {
+          "name": "sellerName",
+          "type": "varchar(180)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sellerCountry": {
+          "name": "sellerCountry",
+          "type": "varchar(2)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "commodity": {
+          "name": "commodity",
+          "type": "varchar(240)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "decimal(18,3)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "unit": {
+          "name": "unit",
+          "type": "varchar(24)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "unitPrice": {
+          "name": "unitPrice",
+          "type": "decimal(18,2)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "totalValue": {
+          "name": "totalValue",
+          "type": "decimal(18,2)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "currency": {
+          "name": "currency",
+          "type": "varchar(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'USD'"
+        },
+        "incoterm": {
+          "name": "incoterm",
+          "type": "varchar(8)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "originCountry": {
+          "name": "originCountry",
+          "type": "varchar(2)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "destinationCountry": {
+          "name": "destinationCountry",
+          "type": "varchar(2)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expectedShipmentDate": {
+          "name": "expectedShipmentDate",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "commercialState": {
+          "name": "commercialState",
+          "type": "enum('draft','confirmed')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'draft'"
+        },
+        "executionState": {
+          "name": "executionState",
+          "type": "enum('not_started','ready','blocked')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'not_started'"
+        },
+        "documentState": {
+          "name": "documentState",
+          "type": "enum('pending','in_progress','complete')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "logisticsState": {
+          "name": "logisticsState",
+          "type": "enum('planned','booked','in_transit','delivered')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'planned'"
+        },
+        "settlementState": {
+          "name": "settlementState",
+          "type": "enum('unconfirmed','partial','confirmed')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'unconfirmed'"
+        },
+        "assuranceState": {
+          "name": "assuranceState",
+          "type": "enum('draft','submitted','under_review','approved','rejected')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'draft'"
+        },
+        "partyKycState": {
+          "name": "partyKycState",
+          "type": "enum('unknown','pending','verified','failed')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "trustScore": {
+          "name": "trustScore",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "trustBand": {
+          "name": "trustBand",
+          "type": "enum('critical','guarded','review','ready')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'critical'"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "onUpdate": true,
+          "default": "(now())"
+        },
+        "submittedAt": {
+          "name": "submittedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "resolvedAt": {
+          "name": "resolvedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "trades_owner_idx": {
+          "name": "trades_owner_idx",
+          "columns": [
+            "ownerId"
+          ],
+          "isUnique": false
+        },
+        "trades_assurance_idx": {
+          "name": "trades_assurance_idx",
+          "columns": [
+            "assuranceState"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "trades_organizationId_organizations_id_fk": {
+          "name": "trades_organizationId_organizations_id_fk",
+          "tableFrom": "trades",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organizationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "trades_ownerId_users_id_fk": {
+          "name": "trades_ownerId_users_id_fk",
+          "tableFrom": "trades",
+          "tableTo": "users",
+          "columnsFrom": [
+            "ownerId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "trades_id": {
+          "name": "trades_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {
+        "trades_reference_unique": {
+          "name": "trades_reference_unique",
+          "columns": [
+            "reference"
+          ]
+        }
+      },
+      "checkConstraint": {}
+    },
+    "users": {
+      "name": "users",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "organizationId": {
+          "name": "organizationId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "openId": {
+          "name": "openId",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar(320)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "loginMethod": {
+          "name": "loginMethod",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "role": {
+          "name": "role",
+          "type": "enum('trader','reviewer')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'trader'"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "onUpdate": true,
+          "default": "(now())"
+        },
+        "lastSignedIn": {
+          "name": "lastSignedIn",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "users_id": {
+          "name": "users_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {
+        "users_openId_unique": {
+          "name": "users_openId_unique",
+          "columns": [
+            "openId"
+          ]
+        }
+      },
+      "checkConstraint": {}
+    },
+    "workflowAlerts": {
+      "name": "workflowAlerts",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "organizationId": {
+          "name": "organizationId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "integrationId": {
+          "name": "integrationId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "integrationRunId": {
+          "name": "integrationRunId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "severity": {
+          "name": "severity",
+          "type": "enum('critical','warning','information')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'warning'"
+        },
+        "status": {
+          "name": "status",
+          "type": "enum('open','acknowledged','resolved')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'open'"
+        },
+        "title": {
+          "name": "title",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "detail": {
+          "name": "detail",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "dedupeKey": {
+          "name": "dedupeKey",
+          "type": "varchar(180)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "occurrenceCount": {
+          "name": "occurrenceCount",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "firstSeenAt": {
+          "name": "firstSeenAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "lastSeenAt": {
+          "name": "lastSeenAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "acknowledgedAt": {
+          "name": "acknowledgedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "acknowledgedBy": {
+          "name": "acknowledgedBy",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "resolvedAt": {
+          "name": "resolvedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "workflow_alert_org_idx": {
+          "name": "workflow_alert_org_idx",
+          "columns": [
+            "organizationId"
+          ],
+          "isUnique": false
+        },
+        "workflow_alert_status_idx": {
+          "name": "workflow_alert_status_idx",
+          "columns": [
+            "status"
+          ],
+          "isUnique": false
+        },
+        "workflow_alert_dedupe_idx": {
+          "name": "workflow_alert_dedupe_idx",
+          "columns": [
+            "organizationId",
+            "dedupeKey"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "workflowAlerts_organizationId_organizations_id_fk": {
+          "name": "workflowAlerts_organizationId_organizations_id_fk",
+          "tableFrom": "workflowAlerts",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organizationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "workflowAlerts_integrationId_integrations_id_fk": {
+          "name": "workflowAlerts_integrationId_integrations_id_fk",
+          "tableFrom": "workflowAlerts",
+          "tableTo": "integrations",
+          "columnsFrom": [
+            "integrationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "workflowAlerts_integrationRunId_integrationRuns_id_fk": {
+          "name": "workflowAlerts_integrationRunId_integrationRuns_id_fk",
+          "tableFrom": "workflowAlerts",
+          "tableTo": "integrationRuns",
+          "columnsFrom": [
+            "integrationRunId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "workflowAlerts_acknowledgedBy_users_id_fk": {
+          "name": "workflowAlerts_acknowledgedBy_users_id_fk",
+          "tableFrom": "workflowAlerts",
+          "tableTo": "users",
+          "columnsFrom": [
+            "acknowledgedBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "workflowAlerts_id": {
+          "name": "workflowAlerts_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    }
+  },
+  "views": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "tables": {},
+    "indexes": {}
+  }
+}
