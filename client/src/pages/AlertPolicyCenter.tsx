@@ -1,0 +1,23 @@
+import { useAuth } from "@/_core/hooks/useAuth";
+import { PageTitle } from "@/components/arcway/primitives";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { trpc } from "@/lib/trpc";
+import { BellRing, SlidersHorizontal } from "lucide-react";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
+
+const policyTypes = ["source_failure", "source_health", "obligation_sla"] as const;
+type AlertType = typeof policyTypes[number];
+type Draft = { enabled: boolean; severity: "critical" | "warning" | "information"; threshold: number };
+
+export default function AlertPolicyCenter() {
+  const { user } = useAuth(); const isReviewer = user?.role === "reviewer"; const data = trpc.operations.integrations.list.useQuery(undefined, { retry: false, enabled: isReviewer }); const utils = trpc.useUtils();
+  const initial = useMemo(() => Object.fromEntries(policyTypes.map(type => { const policy = data.data?.alertPolicies.find(item => item.alertType === type); return [type, { enabled: policy ? policy.enabled === 1 : true, severity: policy?.severity ?? (type === "source_failure" ? "warning" : "critical"), threshold: policy?.threshold ?? (type === "source_health" ? 24 : 1) }]; })) as Record<AlertType, Draft>, [data.data]); const [drafts, setDrafts] = useState<Record<AlertType, Draft> | null>(null); const values = drafts ?? initial;
+  const update = trpc.operations.monitoring.updateAlertPolicy.useMutation({ onSuccess: () => { toast.success("Alert policy saved and audited"); setDrafts(null); utils.operations.integrations.list.invalidate(); }, onError: error => toast.error(error.message) }); const change = (type: AlertType, next: Partial<Draft>) => setDrafts(current => ({ ...(current ?? initial), [type]: { ...(current ?? initial)[type], ...next } }));
+  return <div className="mx-auto max-w-[1180px] animate-enter"><PageTitle eyebrow="Operational alert policies" title="Control which operational events escalate, at what severity, and after which threshold." description="These reviewer-controlled policies govern source-failure and source-health alerting. Changes are organization-scoped, retained in audit history, and applied by operational monitoring rather than hidden application defaults." />
+    {!isReviewer && <div className="panel mt-6 p-6 text-sm leading-6 text-slate-500">Operational alert policy records are available to Reviewers only. Your Trader workspace can continue its permitted Trade Twin evidence and obligation workflows without loading restricted source-operation data.</div>}
+    <div className="mt-6 space-y-4">{policyTypes.map(type => { const draft = values[type]; const health = type === "source_health"; return <div key={type} className="panel p-6"><div className="flex flex-wrap items-start justify-between gap-4"><div className="flex gap-3"><div className="grid h-9 w-9 place-items-center rounded-lg border border-blue-400/15 bg-blue-400/[0.05]"><BellRing className="h-4 w-4 text-blue-300" /></div><div><p className="text-sm font-semibold capitalize text-slate-100">{type.replaceAll("_", " ")}</p><p className="mt-1 max-w-xl text-xs leading-5 text-slate-500">{health ? "Threshold is the number of hours since a provider’s last successful normalized signal before source-health monitoring opens or updates an alert." : type === "source_failure" ? "Threshold is retained as the escalation sensitivity for repeated source failures; enabled and severity are applied to the emitted failure alert." : "Threshold is retained as the escalation sensitivity for overdue obligation lifecycle events."}</p></div></div><Switch checked={draft.enabled} disabled={!isReviewer} onCheckedChange={enabled => change(type, { enabled })} /></div><div className="mt-5 grid gap-3 md:grid-cols-[1fr_180px_160px]"><select value={draft.severity} disabled={!isReviewer} onChange={event => change(type, { severity: event.target.value as Draft["severity"] })} className="h-10 rounded-lg border border-white/[0.1] bg-[#111827] px-3 text-sm text-slate-200"><option value="information">Information</option><option value="warning">Warning</option><option value="critical">Critical</option></select><Input value={draft.threshold} disabled={!isReviewer} onChange={event => change(type, { threshold: Math.max(1, Number(event.target.value || 1)) })} type="number" min={1} max={720} className="border-white/[0.1] bg-[#111827] text-slate-200" /><Button disabled={!isReviewer || update.isPending} onClick={() => update.mutate({ alertType: type, ...draft })} className="bg-blue-500 text-white hover:bg-blue-400"><SlidersHorizontal className="mr-2 h-4 w-4" />Save policy</Button></div></div>; })}</div>
+  </div>;
+}

@@ -1,0 +1,27 @@
+import { EmptyPanel, PageTitle, StatusBadge } from "@/components/arcway/primitives";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { trpc } from "@/lib/trpc";
+import { AlertTriangle, CheckCircle2, Landmark, ShieldAlert } from "lucide-react";
+import { useState } from "react";
+import { Link } from "wouter";
+
+type LcResult = { applicable: boolean; status: string; documentsVerified: number; documentsRequired: number; disclaimer: string; checks: Array<{ key: string; title: string; status: string; detail: string; action: string }> };
+
+export default function LCPreflightCenter() {
+  const { user } = useAuth();
+  const reviewer = user?.role === "reviewer";
+  const trades = trpc.trades.list.useQuery(undefined, { retry: false });
+  const [tradeId, setTradeId] = useState<number | null>(null);
+  const activeId = tradeId ?? trades.data?.[0]?.id ?? null;
+  const result = trpc.operations.settlement.lcPreflight.useQuery({ tradeId: activeId ?? 0 }, { enabled: Boolean(reviewer && activeId), retry: false });
+  const data = result.data as LcResult | undefined;
+
+  if (!reviewer) return <div className="mx-auto max-w-4xl"><PageTitle eyebrow="LC specialist preflight" title="Documentary presentation checks are reviewer-controlled." description="Letter-of-credit terms and document conditions can affect bank presentation. ARCWAY keeps this specialist assessment in the Reviewer workspace and never makes a bank, legal, or regulatory determination." /><EmptyPanel title="Reviewer access required" description="A Reviewer must inspect configured LC terms, source evidence, deadlines, and conflicts before relying on specialist presentation readiness." /></div>;
+  return <div className="mx-auto max-w-[1540px] animate-enter"><PageTitle eyebrow="LC specialist preflight" title="Assess available documentary presentation evidence." description="ARCWAY deterministically compares configured LC terms with retained evidence. It identifies missing documents, deadlines, and source conflicts without providing a bank, legal, or regulatory guarantee." />
+    <div className="mt-6 grid gap-5 xl:grid-cols-[260px_1fr]"><aside className="panel h-fit overflow-hidden"><div className="border-b border-white/[0.07] px-4 py-3"><p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-slate-500">Trade Twin</p></div>{trades.data?.map(trade => <button key={trade.id} onClick={() => setTradeId(trade.id)} className={`w-full border-b border-white/[0.05] px-4 py-4 text-left ${activeId === trade.id ? "bg-blue-500/[0.08]" : "hover:bg-white/[0.03]"}`}><p className="font-mono text-[10px] text-blue-300">{trade.reference}</p><p className="mt-1 text-xs text-slate-300">{trade.sellerName} → {trade.buyerName}</p><p className="mt-1 text-[10px] text-slate-600">{trade.currency} {trade.totalValue}</p></button>)}</aside>
+      <section className="space-y-5">{result.isLoading ? <div className="panel p-10 text-sm text-slate-500">Evaluating retained LC terms and evidence…</div> : data ? <><div className="grid gap-4 md:grid-cols-3"><Stat icon={Landmark} label="Presentation status" value={data.status.replaceAll("_", " ")} /><Stat icon={CheckCircle2} label="Required documents" value={`${data.documentsVerified} / ${data.documentsRequired}`} tone="emerald" /><Stat icon={ShieldAlert} label="Evidence checks" value={String(data.checks.length)} tone="amber" /></div><div className="rounded-xl border border-amber-400/20 bg-amber-400/[0.04] p-4 text-xs leading-5 text-amber-100"><AlertTriangle className="mr-2 inline h-4 w-4" />{data.disclaimer}</div><div className="panel overflow-hidden"><div className="border-b border-white/[0.07] px-6 py-4"><p className="text-sm font-semibold text-slate-100">Documentary presentation checks</p><p className="mt-1 text-xs text-slate-500">Each result is evidence-led, actionable, and retained only as an ARCWAY assurance assessment.</p></div><div className="divide-y divide-white/[0.06]">{data.checks.map(check => <div key={check.key} className="grid gap-4 px-6 py-5 md:grid-cols-[minmax(0,1fr)_auto]"><div><div className="flex items-center gap-2"><p className="text-sm font-medium capitalize text-slate-100">{check.title}</p><StatusBadge status={check.status.replaceAll("_", " ")} /></div><p className="mt-2 text-xs leading-5 text-slate-400">{check.detail}</p><p className="mt-2 text-xs leading-5 text-slate-200">{check.action}</p></div><Link href={`/trades/${activeId}/workspace`}><Button variant="outline" className="h-9 border-blue-400/20 bg-blue-400/[0.04] text-xs text-blue-200 hover:bg-blue-400/[0.1]">Open Trade Twin</Button></Link></div>)}</div></div></> : <EmptyPanel title="No Trade Twin available" description="Create or reconstruct a Trade Twin before running specialist documentary presentation checks." />}</section></div>
+  </div>;
+}
+
+function Stat({ icon: Icon, label, value, tone = "blue" }: { icon: typeof Landmark; label: string; value: string; tone?: "blue" | "amber" | "emerald" }) { const colors = { blue: "bg-blue-400/[0.08] text-blue-300", amber: "bg-amber-400/[0.08] text-amber-300", emerald: "bg-emerald-400/[0.08] text-emerald-300" }; return <div className="panel p-5"><div className={`grid h-9 w-9 place-items-center rounded-lg ${colors[tone]}`}><Icon className="h-4 w-4" /></div><p className="mt-4 text-lg font-semibold capitalize text-slate-100">{value}</p><p className="mt-1 text-xs text-slate-500">{label}</p></div>; }
