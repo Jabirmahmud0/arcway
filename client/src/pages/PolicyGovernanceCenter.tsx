@@ -44,22 +44,22 @@ export default function PolicyGovernanceCenter() {
         description="Policy packs are organization-scoped. Every authored rule set becomes an immutable version used by preflight snapshots and governed waiver decisions."
       />
 
-      <div className="mt-6 grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
+      <div className="mt-6 grid items-start gap-5 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
         <div className="panel p-6">
           <div className="flex items-center gap-2">
-            <ClipboardCheck className="h-4 w-4 text-blue-300" />
+            <ClipboardCheck className="h-4 w-4 text-teal-300" />
             <p className="text-sm font-semibold text-slate-100">Author policy pack</p>
           </div>
           <p className="mt-2 text-xs leading-5 text-slate-500">Only Reviewers can author organization policy. The submitted rule set is stored as policy version 1 and is later bound into release-decision history.</p>
-          <Input value={name} onChange={event => setName(event.target.value)} disabled={!isReviewer} placeholder="Policy pack name" className="mt-5 border-white/[0.1] bg-[#111827] text-slate-200" />
+          <Input value={name} onChange={event => setName(event.target.value)} disabled={!isReviewer} placeholder="Policy pack name" className="mt-5 border-white/[0.1] bg-card text-slate-200" />
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <select value={scope} disabled={!isReviewer} onChange={event => setScope(event.target.value as typeof scope)} className="h-10 rounded-lg border border-white/[0.1] bg-[#111827] px-3 text-sm text-slate-200">
+            <select value={scope} disabled={!isReviewer} onChange={event => setScope(event.target.value as typeof scope)} className="h-10 rounded-lg border border-white/[0.1] bg-card px-3 text-sm text-slate-200">
               {["company", "counterparty", "product", "route", "payment", "transport", "jurisdiction"].map(value => <option key={value} value={value}>{value}</option>)}
             </select>
-            <Input value={jurisdiction} disabled={!isReviewer} onChange={event => setJurisdiction(event.target.value)} placeholder="Jurisdiction (optional)" className="border-white/[0.1] bg-[#111827] text-slate-200" />
+            <Input value={jurisdiction} disabled={!isReviewer} onChange={event => setJurisdiction(event.target.value)} placeholder="Jurisdiction (optional)" className="border-white/[0.1] bg-card text-slate-200" />
           </div>
-          <Textarea value={rules} disabled={!isReviewer} onChange={event => setRules(event.target.value)} className="mt-3 min-h-56 border-white/[0.1] bg-[#111827] font-mono text-xs text-slate-200" />
-          <Button disabled={!isReviewer || !name.trim() || create.isPending} onClick={submit} className="mt-3 w-full bg-blue-500 text-white hover:bg-blue-400">
+          <Textarea value={rules} disabled={!isReviewer} onChange={event => setRules(event.target.value)} className="mt-3 min-h-56 border-white/[0.1] bg-card font-mono text-xs text-slate-200" />
+          <Button disabled={!isReviewer || !name.trim() || create.isPending} onClick={submit} className="mt-3 w-full bg-teal-500 text-white hover:bg-teal-600">
             <ShieldCheck className="mr-2 h-4 w-4" />
             Author policy version
           </Button>
@@ -89,7 +89,7 @@ export default function PolicyGovernanceCenter() {
                       {versions.map(version => (
                         <div key={version.id} className="rounded-lg border border-white/[0.07] bg-white/[0.025] p-3">
                           <div className="flex items-center justify-between">
-                            <p className="font-mono text-xs text-blue-200">v{version.version}</p>
+                            <p className="font-mono text-xs text-teal-200">v{version.version}</p>
                             <p className="text-[10px] text-slate-600">effective {new Date(version.effectiveFrom).toLocaleDateString()}</p>
                           </div>
                           <pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-[11px] leading-5 text-slate-400">{JSON.stringify(version.rules, null, 2)}</pre>

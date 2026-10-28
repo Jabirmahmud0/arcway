@@ -1,3 +1,4 @@
+import { useAuth as useClerkAuth, useClerk } from "@clerk/react";
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
@@ -8,7 +9,7 @@ type UseAuthOptions = {
   redirectPath?: string;
 };
 
-export function useAuth(options?: UseAuthOptions) {
+function useLegacyAuth(options?: UseAuthOptions) {
   // Login is started via startLogin() in the effect below, only when we actually
   // navigate — never during render. startLogin() mints a one-time nonce + writes
   // the state cookie, so calling it per render would overwrite the cookie and
@@ -96,3 +97,39 @@ export function useAuth(options?: UseAuthOptions) {
     logout,
   };
 }
+
+function useClerkWorkspaceAuth(options?: UseAuthOptions) {
+  const { isLoaded, isSignedIn } = useClerkAuth();
+  const clerk = useClerk();
+  const query = trpc.auth.me.useQuery(undefined, {
+    enabled: isLoaded && isSignedIn,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const logout = useCallback(async () => {
+    await clerk.signOut({ redirectUrl: "/sign-in" });
+  }, [clerk]);
+  useEffect(() => {
+    if (options?.redirectOnUnauthenticated && isLoaded && !isSignedIn)
+      startLogin();
+  }, [options?.redirectOnUnauthenticated, isLoaded, isSignedIn]);
+  const user = isSignedIn ? (query.data ?? null) : null;
+  const missingWorkspace = isSignedIn && query.isSuccess && !query.data;
+  return {
+    user,
+    loading: !isLoaded || Boolean(isSignedIn && query.isPending),
+    error:
+      query.error ??
+      (missingWorkspace
+        ? new Error(
+            "Your session could not be linked to the workspace. Please retry."
+          )
+        : null),
+    isAuthenticated: Boolean(user),
+    refresh: () => query.refetch(),
+    logout,
+  };
+}
+export const useAuth = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+  ? useClerkWorkspaceAuth
+  : useLegacyAuth;

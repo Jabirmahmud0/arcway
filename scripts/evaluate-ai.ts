@@ -1,0 +1,11 @@
+import "dotenv/config";
+import { runAiEvaluation, saveAiEvaluation } from "../server/aiEvaluation";
+import { getDocumentProviders } from "../server/_core/aiProviders";
+const provider = process.argv.find(value => value.startsWith("--provider="))?.split("=")[1] || "gemini";
+const workspace = Number(process.argv.find(value => value.startsWith("--workspace="))?.split("=")[1]);
+if (!["gemini", "groq"].includes(provider) || !Number.isSafeInteger(workspace) || workspace < 1) throw new Error("Usage: pnpm ai:evaluate --provider=gemini --workspace=WORKSPACE_ID");
+if (!getDocumentProviders(false).includes(provider as "gemini" | "groq")) throw new Error("Selected provider is not configured");
+const report = await runAiEvaluation(provider as "gemini" | "groq");
+await saveAiEvaluation(workspace, report);
+console.log(JSON.stringify({ id: report.id, provider, completed: report.completedCases, total: report.totalCases, passed: report.passedCases, precision: report.precision, recall: report.recall, f1: report.f1, fieldAccuracy: report.fieldAccuracy, models: Array.from(new Set(report.cases.map(item => item.model))) }));
+if (report.completedCases !== report.totalCases) process.exitCode = 1;

@@ -1,0 +1,17 @@
+[Unit]
+Description=ARCWAY private database and evidence backup
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=arcway
+Group=arcway
+WorkingDirectory=/opt/arcway
+EnvironmentFile=/etc/arcway/arcway.env
+ExecStart=/usr/bin/node /opt/arcway/node_modules/tsx/dist/cli.mjs /opt/arcway/scripts/backup.ts
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/arcway/backups
+UMask=0077

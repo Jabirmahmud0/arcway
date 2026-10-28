@@ -263,7 +263,7 @@ The **Trade Inbox** is where all unstructured incoming information lands — ema
 
 Structured spreadsheet imports include AI-assisted column mapping: ARCWAY suggests which of your columns maps to which canonical field. Mappings are saved and reusable per source.
 
-Ingestion sources: Email (Gmail / Outlook / forwarding), PDF, XLSX, CSV, DOCX, images, AWS S3-compatible storage, and pluggable ERP adapters.
+Implemented intake: manual email, Gmail OAuth imports, PDF/images/text/CSV document upload, and CSV/XLSX source intake. Outlook, ERP, carrier, and other provider adapters are samples until a provider-specific connection is implemented.
 
 ---
 
@@ -467,8 +467,8 @@ ARCWAY is a **modular monolith** — a single deployable application with cleanl
            +-------------+-------------+
            |                           |
 +----------v-----------+   +-----------v------------------+
-|  MySQL / Drizzle ORM |   |  AWS S3-compatible Storage   |
-|  52+ tables          |   |  Presigned URL delivery      |
+|  Neon PG / Drizzle ORM |   |  Private local file storage   |
+|  47 tables          |   |  Authenticated downloads      |
 |  20 migrations       |   +------------------------------+
 +----------------------+
 ```
@@ -514,7 +514,7 @@ ARCWAY is a **modular monolith** — a single deployable application with cleanl
 | Express | 4 | HTTP server |
 | tRPC | 11 | Type-safe API router |
 | Drizzle ORM | 0.44 | Type-safe SQL query builder and migrations |
-| MySQL 2 | 3 | Database driver |
+| pg | 8 | Neon PostgreSQL database driver |
 | Zod | 4 | Runtime validation schemas |
 | jose | 6 | JWT session token signing and verification |
 | AWS SDK v3 | 3 | S3-compatible object storage |
@@ -592,7 +592,7 @@ ARCWAY-c92d0ae5/
 |   |   +-- llm.ts                  # LLM provider abstraction (multimodal)
 |   |   +-- voiceTranscription.ts   # Whisper-compatible audio transcription
 |   |   +-- imageGeneration.ts      # Image generation utility
-|   |   +-- storageProxy.ts         # S3-compatible object storage wrapper
+|   |   +-- storageProxy.ts         # Authorized private-file downloads
 |   |   +-- oauth.ts                # OAuth 2.0 PKCE callback + dev login
 |   |   +-- cookies.ts              # Secure session cookie management
 |   |   +-- env.ts                  # Typed environment config
@@ -648,7 +648,7 @@ ARCWAY-c92d0ae5/
 |   +-- const.ts
 |
 +-- drizzle/                        # Database schema and migrations
-|   +-- schema.ts                   # Full schema (43,437 bytes, 52+ tables)
+|   +-- schema.ts                   # PostgreSQL schema (47 tables)
 |   +-- 0000-0019_*.sql             # 20 incremental migration files
 |
 +-- vite.config.ts
@@ -663,7 +663,7 @@ ARCWAY-c92d0ae5/
 
 ## Database Schema
 
-`drizzle/schema.ts` defines 52+ tables across all trade domains:
+`drizzle/schema.ts` defines 47 tables across all trade domains:
 
 **Identity and Access**
 `users` `organizations` `memberships` `capabilityGrants` `organizationControls`
@@ -728,7 +728,7 @@ Authorization is enforced at the procedure level via `requireArcwayRole` and `ca
 | **Guest access** | Scoped `guestAccessGrants` per trade per request; configurable expiry, OTP, full audit logging |
 | **Document integrity** | SHA hashes on issued document snapshots; immutable once issued |
 | **Secret management** | All secrets via environment variables; typed and validated through `env.ts` |
-| **Signed storage links** | S3 presigned URLs for file delivery; no public bucket exposure |
+| **Private file downloads** | Authenticated routes enforce trade/workspace access; local files are not public |
 | **Audit immutability** | `auditRecords` is append-only; no application-layer delete path exposed |
 | **Upload validation** | File type and size validated before any storage write |
 
@@ -740,8 +740,8 @@ Authorization is enforced at the procedure level via `requireArcwayRole` and `ca
 
 - Node.js 20+
 - pnpm 10+
-- MySQL 8+ (or compatible)
-- S3-compatible object storage
+- Neon PostgreSQL (or PostgreSQL 14+)
+- Persistent local disk for document storage (no cloud credentials needed)
 
 ### Install dependencies
 
@@ -756,10 +756,10 @@ Create a `.env` file with the variables listed in the [Environment Variables](#e
 ### Apply database schema
 
 ```bash
-pnpm db:push
+pnpm db:migrate
 ```
 
-Generates migration SQL from `drizzle/schema.ts` and applies it to `DATABASE_URL`.
+Applies the PostgreSQL migrations from `drizzle/postgresql`. Use `pnpm db:generate` after changing `drizzle/schema.ts`. The original root SQL is retained only as legacy MySQL history.
 
 ### Start development server
 
@@ -788,16 +788,16 @@ pnpm check
 
 | Variable | Required | Description |
 |---|---|---|
-| `DATABASE_URL` | Yes | MySQL connection string |
+| `DATABASE_URL` | Yes | Neon PostgreSQL connection string with TLS |
 | `JWT_SECRET` | Yes | Session token signing key (minimum 32 characters) |
-| `OAUTH_SERVER_URL` | Yes | OAuth provider base URL |
-| `OWNER_OPEN_ID` | Yes | OpenID of the primary workspace owner |
-| `BUILT_IN_FORGE_API_URL` | Yes | LLM / AI provider base URL |
-| `BUILT_IN_FORGE_API_KEY` | Yes | LLM / AI provider API key |
-| `AWS_ACCESS_KEY_ID` | Yes | S3-compatible storage access key |
-| `AWS_SECRET_ACCESS_KEY` | Yes | S3-compatible storage secret |
-| `AWS_S3_BUCKET` | Yes | Object storage bucket name |
-| `AWS_S3_ENDPOINT` | Conditional | Custom endpoint for non-AWS S3 providers |
+| `OAUTH_SERVER_URL` | Legacy only | Original OAuth provider, unused with Clerk |
+| `OWNER_OPEN_ID` | Optional | Explicit Clerk user ID granted reviewer access |
+| `BUILT_IN_FORGE_API_URL` | Optional legacy | Original Forge file access and notifications |
+| `BUILT_IN_FORGE_API_KEY` | Optional legacy | Original Forge credential |
+| `AWS_ACCESS_KEY_ID` | Unused | S3-compatible storage access key | (No S3 adapter is active.)
+| `AWS_SECRET_ACCESS_KEY` | Unused | S3-compatible storage secret | (No S3 adapter is active.)
+| `AWS_S3_BUCKET` | Unused | Object storage bucket name | (No S3 adapter is active.)
+| `AWS_S3_ENDPOINT` | Unused | Custom endpoint for non-AWS S3 providers | (No S3 adapter is active.)
 | `NODE_ENV` | No | `development` or `production` (default: `development`) |
 | `VITE_APP_ID` | No | App identifier used in client build (default: `arcway`) |
 
@@ -894,3 +894,43 @@ The long-term north star:
 ---
 
 *ARCWAY — Global Trade Assurance and Operating Network*
+
+
+### Current local configuration
+
+- Neon PostgreSQL uses `DATABASE_URL`; `DATABASE_MIGRATION_URL` optionally supplies a direct connection for migrations. The active PostgreSQL baseline has 47 tables. Run `pnpm db:migrate` to apply it.
+- Clerk uses the official React and Express SDKs. Set `VITE_CLERK_PUBLISHABLE_KEY`, `CLERK_PUBLISHABLE_KEY` (same value), `CLERK_SECRET_KEY`, and `CLERK_AUTHORIZED_PARTIES`. This is a Vite app; NEXT_PUBLIC_ variables alone do not configure it. Open `/sign-in` or `/sign-up`.
+- With Clerk enabled, legacy development login, Manus OAuth callbacks, and legacy JWT-cookie authentication are disabled. A partially configured Clerk deployment fails startup. User identity is linked by verified Clerk user ID, never merged by email. New accounts start as traders. To grant reviewer access explicitly, set `OWNER_OPEN_ID` to the account's `user_...` ID from the Clerk dashboard and restart. Do not use an email or publishable key.
+- Each newly provisioned account receives a workspace. Existing roles and workspaces are retained. Query caches reset when the signed-in identity changes. Operational scheduling uses the native workspace worker and works with Clerk; optional external cron access uses a separate bearer secret.
+- AI uses `AI_PROVIDER=gemini` and `AI_FALLBACK_PROVIDER=groq`, `GEMINI_API_KEY`, and `GROQ_API_KEY`. Current configured models are `gemini-2.5-flash` and `qwen/qwen3.8-27b`. No OpenAI key is used. Image extraction requires Gemini; Groq is a text fallback. Missing or invalid AI output produces review-required issues rather than invented values.
+- See `.env.example` for all variable names. No server secret should have a VITE_ prefix. Use production Clerk keys and exact HTTPS authorized origins when deploying.
+
+### Private document storage
+
+Uploads now save actual bytes on private local disk under `STORAGE_LOCAL_DIR` (default `.data/uploads`); metadata, extracted fields, and immutable versions are stored in Neon. No additional storage credentials are required. `.data/` is ignored by Git. Downloads require sign-in and access to the owning trade, including previous versions, and are served as attachments with private/no-store caching and content sniffing disabled.
+
+From a Trader account, create/open a trade, then upload PDF, JPG, PNG, TXT, or CSV evidence into a document slot (10 MB maximum). The server validates encoding and file signatures, extracts structured fields using Gemini/Groq, retains inconsistencies, and updates the trade score. An unreadable document or unavailable AI provider is retained with an explicit review-required issue. Scanned PDFs without machine-readable text currently require manual review. Optional Forge notification delivery does not prevent upload completion.
+
+Document uploads also publish each non-empty extracted trade field to the evidence records used by **Comparison Matrix**, **Canonicalization**, and other workspace evidence views. These supporting fields retain the document ID, file key, version, location, extraction time, and confidence. They do not automatically approve or replace canonical trade values. Replacing a document retires its previous generated fields from current comparisons while retaining history and reviewer references. The document update, version snapshot, and evidence records commit together. `document-fields-v1` identifies the mapping pipeline; it does not claim a model/provider identity that older extractions did not record.
+
+For uploads made before this mapping was added, run `npm run db:backfill-evidence -- --dry-run` to preview counts, then `npm run db:backfill-evidence`. This reads existing extracted JSON without another AI call or file upload. It is safe to rerun, preserves human-confirmed and structured-file evidence, and uses the same document lock as uploads.
+
+Reviewer corrections now retain a new immutable extraction snapshot, retire superseded generated fields, refresh consistency flags on both affected sources, resolve obsolete generated exceptions, recalculate trust, and retain a new release preflight. Manual exceptions and canonical decisions remain available for explicit review. The corrected document returns to review, and changed evidence reopens an approved assurance state. All correction updates and their audit record commit together. New AI extractions record the actual provider/model, prompt version, input hash, and timing.
+
+### Evaluation, scheduling, and deployment
+
+The Reviewer **Evaluation** page includes a live Gemini/Groq document benchmark alongside its separate deterministic rules suite. Reports retain measured results and per-field mismatches for five versioned synthetic cases. See [AI evaluation](docs/AI_EVALUATION.md) for metrics and coverage limits.
+
+**Monitoring** supports persistent per-workspace UTC schedules, pause/resume, retained outcomes, and a native worker without an external scheduler account. Reviewer-triggered and scheduled sweeps are scoped to the workspace and coordinated with database locks.
+
+[Node.js deployment and backup guide](docs/DEPLOYMENT.md) covers production configuration, health endpoints, native PostgreSQL backups, checksum verification, restore drills, CI, and optional Linux service templates. Docker is not required. Public hosting, production Clerk configuration, DNS, and off-machine backup storage remain deployment-environment choices.
+
+For deployment, mount persistent disk at `STORAGE_LOCAL_DIR` and `INTEGRATION_TOKEN_DIR`, and back up both alongside Neon. Ephemeral hosting loses files on redeployment. Multiple instances require a shared private volume and routing affinity for Gmail OAuth state. A cloud object-storage backend is not included in this local implementation. Older Forge-backed files still require their original Forge credentials.
+
+### Gmail connection
+
+Gmail now has a real read-only OAuth connector with manual imports. Open **Integrations** to connect your account, select a trade, review the Gmail search, and import matching messages and supported attachments. Imports are retained as source receipts in **Trade Inbox** with downloadable original content. They do not automatically overwrite canonical fields or mark required documents verified. Duplicate imports are skipped, including after partial failures. Tokens are encrypted with AES-256-GCM on private disk and bound to the connecting user and workspace.
+
+Gmail does not send, modify, delete, or mark messages read. Sync is operator-triggered, not a background watcher. Each batch imports up to 10 messages; use **Import next batch** for more results. HTML-only email retains headers without rendered HTML. Gmail imports are not automatically sent to an AI provider; upload an attachment into a document slot to extract it.
+
+See [Gmail setup](docs/GMAIL_SETUP.md) for Google OAuth credentials and exact callback settings. Other ERP/carrier/payment adapters remain explicitly labelled samples under **Show samples**; they do not contact real providers.

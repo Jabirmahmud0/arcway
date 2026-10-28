@@ -1,0 +1,12 @@
+SYNTHETIC TEST DOCUMENT - DELIBERATE QUANTITY MISMATCH
+Packing list for invoice ARCWAY-DEMO-001
+Issue date: 2026-10-17
+Seller: Meridian Exports
+Buyer: Northstar Foods
+Goods: Arabica coffee beans
+Quantity: 950 kg
+Incoterm: FOB
+Origin country: BD
+Destination country: DE
+Expected shipment date: 2026-11-15
+Test expectation: invoice says 1000 kg; this packing list says 950 kg.

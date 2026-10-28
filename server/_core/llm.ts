@@ -1,4 +1,4 @@
-import { ENV } from "./env";
+import { getAIProviderConfig, type AIProvider } from "./aiProviders";
 
 export type Role = "system" | "user" | "assistant" | "tool" | "function";
 
@@ -19,7 +19,12 @@ export type FileContent = {
   type: "file_url";
   file_url: {
     url: string;
-    mime_type?: "audio/mpeg" | "audio/wav" | "application/pdf" | "audio/mp4" | "video/mp4" ;
+    mime_type?:
+      | "audio/mpeg"
+      | "audio/wav"
+      | "application/pdf"
+      | "audio/mp4"
+      | "video/mp4";
   };
 };
 
@@ -56,6 +61,7 @@ export type ToolChoice =
   | ToolChoiceExplicit;
 
 export type InvokeParams = {
+  provider?: AIProvider;
   messages: Message[];
   tools?: Tool[];
   toolChoice?: ToolChoice;
@@ -212,17 +218,6 @@ const normalizeToolChoice = (
   return toolChoice;
 };
 
-const resolveApiUrl = () =>
-  ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
-    ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
-    : "https://forge.manus.im/v1/chat/completions";
-
-const assertApiKey = () => {
-  if (!ENV.forgeApiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
-  }
-};
-
 const normalizeResponseFormat = ({
   responseFormat,
   response_format,
@@ -268,7 +263,7 @@ const normalizeResponseFormat = ({
   };
 };
 
-const RETRY_MAX_RETRIES = 4;
+const RETRY_MAX_RETRIES = 2;
 const RETRY_BASE_DELAY_MS = 500;
 const RETRY_MAX_DELAY_MS = 30_000;
 
@@ -307,14 +302,19 @@ const fetchWithBackoff = async (
 
   for (let attempt = 0; attempt <= RETRY_MAX_RETRIES; attempt++) {
     try {
-      const response = await fetch(url, init);
-      if (response.ok || attempt === RETRY_MAX_RETRIES) {
+      const response = await fetch(url, {
+        ...init,
+        signal: AbortSignal.timeout(45_000),
+      });
+      if (
+        response.ok ||
+        ![408, 409, 429, 500, 502, 503, 504].includes(response.status) ||
+        attempt === RETRY_MAX_RETRIES
+      ) {
         return response;
       }
 
-      const retryAfterMs = parseRetryAfter(
-        response.headers.get("retry-after")
-      );
+      const retryAfterMs = parseRetryAfter(response.headers.get("retry-after"));
       try {
         await response.body?.cancel();
       } catch {
@@ -340,7 +340,24 @@ const fetchWithBackoff = async (
 };
 
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
-  assertApiKey();
+  const config = getAIProviderConfig(params.provider);
+  if (!config.apiKey)
+    throw new Error(
+      `${config.provider.toUpperCase()}_API_KEY is not configured`
+    );
+  const hasImages = params.messages.some(
+    message =>
+      Array.isArray(message.content) &&
+      message.content.some(
+        part =>
+          typeof part !== "string" &&
+          (part.type === "image_url" || part.type === "file_url")
+      )
+  );
+  if (hasImages && !config.supportsImages)
+    throw new Error(
+      "The configured Groq model accepts text only. Use Gemini for images."
+    );
 
   const {
     messages,
@@ -362,8 +379,12 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     messages: messages.map(normalizeMessage),
   };
 
-  if (model) {
-    payload.model = model;
+  payload.model = model || config.model;
+  if (
+    config.provider === "gemini" &&
+    String(payload.model).startsWith("gemini-2.5-flash")
+  ) {
+    payload.reasoning_effort = "none";
   }
 
   if (tools && tools.length > 0) {
@@ -398,22 +419,36 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   });
 
   if (normalizedResponseFormat) {
-    payload.response_format = normalizedResponseFormat;
+    if (
+      config.provider === "groq" &&
+      normalizedResponseFormat.type === "json_schema"
+    ) {
+      payload.response_format = { type: "json_object" };
+      const messages = payload.messages as Array<Record<string, unknown>>;
+      messages.unshift({
+        role: "system",
+        content: `Return a JSON object conforming to this schema: ${JSON.stringify(normalizedResponseFormat.json_schema.schema)}`,
+      });
+    } else {
+      payload.response_format = normalizedResponseFormat;
+    }
   }
 
-  const response = await fetchWithBackoff(resolveApiUrl(), {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
-    },
-    body: JSON.stringify(payload),
-  });
+  const response = await fetchWithBackoff(
+    `${config.baseUrl}/chat/completions`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify(payload),
+    }
+  );
 
   if (!response.ok) {
-    const errorText = await response.text();
     throw new Error(
-      `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
+      `${config.provider} AI request failed (HTTP ${response.status}).`
     );
   }
 
@@ -432,23 +467,27 @@ export type ModelsResponse = {
   data: ModelInfo[];
 };
 
-export async function listLLMModels(): Promise<ModelsResponse> {
-  assertApiKey();
-
-  const url = ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
-    ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/models`
-    : "https://forge.manus.im/v1/models";
-
-  const response = await fetchWithBackoff(url, {
-    headers: { authorization: `Bearer ${ENV.forgeApiKey}` },
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
+export async function listLLMModels(
+  provider?: AIProvider
+): Promise<ModelsResponse> {
+  const config = getAIProviderConfig(provider);
+  if (!config.apiKey)
     throw new Error(
-      `List LLM models failed: ${response.status} ${response.statusText} – ${errorText}`
+      `${config.provider.toUpperCase()}_API_KEY is not configured`
     );
-  }
-
-  return (await response.json()) as ModelsResponse;
+  const response = await fetchWithBackoff(`${config.baseUrl}/models`, {
+    headers: { authorization: `Bearer ${config.apiKey}` },
+  });
+  if (!response.ok)
+    throw new Error(
+      `${config.provider} model list failed (HTTP ${response.status}).`
+    );
+  const result = (await response.json()) as ModelsResponse;
+  return {
+    ...result,
+    data: result.data.map(model => ({
+      ...model,
+      id: model.id.replace(/^models\//, ""),
+    })),
+  };
 }

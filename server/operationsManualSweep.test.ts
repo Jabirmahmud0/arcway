@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TrpcContext } from "./_core/context";
 
 const persistence = vi.hoisted(() => ({
+  sweep: vi.fn(),
   runObligationSweep: vi.fn(),
   runSourceHealthSweep: vi.fn(),
   appendAudit: vi.fn(),
@@ -11,6 +12,7 @@ vi.mock("./db", async importOriginal => {
   const actual = await importOriginal<typeof import("./db")>();
   return {
     ...actual,
+    runWorkspaceOperationalSweep: persistence.sweep,
     runObligationEscalationSweep: persistence.runObligationSweep,
     runSourceHealthSweep: persistence.runSourceHealthSweep,
     appendAuditRecord: persistence.appendAudit,
@@ -49,12 +51,13 @@ describe("operations.monitoring.runOperationalSweep", () => {
     const sourceHealth = { checked: 5, warnings: 1 };
     persistence.runObligationSweep.mockResolvedValue(obligations);
     persistence.runSourceHealthSweep.mockResolvedValue(sourceHealth);
+    persistence.sweep.mockResolvedValue({ obligations, sourceHealth });
     const caller = appRouter.createCaller(createReviewerContext());
 
     await expect(caller.operations.monitoring.runOperationalSweep()).resolves.toEqual({ obligations, sourceHealth });
 
-    expect(persistence.runObligationSweep).toHaveBeenCalledOnce();
-    expect(persistence.runSourceHealthSweep).toHaveBeenCalledOnce();
+    expect(persistence.sweep).toHaveBeenCalledWith(1);
+    expect(persistence.runSourceHealthSweep).not.toHaveBeenCalled();
     expect(persistence.appendAudit).toHaveBeenCalledWith({
       organizationId: 1,
       actorId: 42,

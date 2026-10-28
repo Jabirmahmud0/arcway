@@ -1,3 +1,4 @@
+import { ENV } from "./env";
 import { COOKIE_NAME, ONE_YEAR_MS, OAUTH_STATE_COOKIE, decodeOAuthState } from "@shared/const";
 import { parse as parseCookieHeader } from "cookie";
 import type { Express, Request, Response } from "express";
@@ -11,6 +12,10 @@ function getQueryParam(req: Request, key: string): string | undefined {
 }
 
 export function registerOAuthRoutes(app: Express) {
+  if (ENV.clerkEnabled) {
+    app.all("/api/oauth/*", (_req, res) => { res.status(404).json({ error: "Legacy login is disabled. Use Clerk sign-in." }); });
+    return;
+  }
   app.get("/api/oauth/dev-login", async (req: Request, res: Response) => {
     const openId = "dev-reviewer-01";
     const name = "ARCWAY Reviewer";

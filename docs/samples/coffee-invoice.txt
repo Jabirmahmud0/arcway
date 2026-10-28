@@ -1,0 +1,16 @@
+SYNTHETIC TEST DOCUMENT - NOT A REAL COMMERCIAL INVOICE
+Invoice number: ARCWAY-DEMO-001
+Issue date: 2026-10-17
+Seller: Meridian Exports
+Seller country: Bangladesh (BD)
+Buyer: Northstar Foods
+Buyer country: Germany (DE)
+Goods: Arabica coffee beans
+Quantity: 1000 kg
+Unit price: USD 4.25 per kg
+Total amount: USD 4250.00
+Currency: USD
+Incoterm: FOB
+Origin country: BD
+Destination country: DE
+Expected shipment date: 2026-11-15

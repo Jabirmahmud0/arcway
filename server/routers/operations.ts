@@ -63,15 +63,22 @@ import {
   updateWorkflowAlert,
   upsertWorkflowAlertPolicy,
   getOperationalSchedule,
+  configureWorkspaceSchedule,
+  runWorkspaceOperationalSweep,
   registerOperationalSchedule,
   listOrganizationExceptionsForAlertQuality,
 } from "../db";
+import { extractionValidator } from "../services/documentIntelligence";
+import { getDocumentProviders, getAIProviderConfig } from "../_core/aiProviders";
+import { latestAiEvaluation, runAiEvaluation, saveAiEvaluation } from "../aiEvaluation";
 import { buildChangeImpact } from "../changeImpact";
 import { evaluateLcPreflight } from "../lcPreflight";
 import { requireArcwayRole } from "../access";
 import { protectedProcedure, router } from "../_core/trpc";
 import { providerCatalog, simulateProviderRun } from "../integrations/registry";
 import { storagePut } from "../storage";
+import { decodeUpload } from "../uploadValidation";
+import { beginGmail, disconnectGmail, gmailStatus, syncGmail } from "../integrations/gmail";
 import { applyStructuredFieldMapping } from "../structuredMapping";
 import { canTransitionPartnerRequest } from "../partnerAccess";
 import { parseStructuredSpreadsheet } from "../structuredSpreadsheet";
@@ -85,14 +92,14 @@ import { buildSourcePartyAliasProposals } from "../sourcePartyAlias";
 import { isValidSixFieldUtcCron } from "../operationalSchedule";
 import { buildAlertQualityMetrics } from "../alertQuality";
 import { runDeterministicEvaluation } from "../deterministicEvaluation";
-import { createHeartbeatJob, updateHeartbeatJob } from "../_core/heartbeat";
-import { COOKIE_NAME } from "@shared/const";
-import { parse as parseCookieHeader } from "cookie";
 
 function workspaceId(user: { organizationId?: number | null }) {
   if (!user.organizationId) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Workspace provisioning is still completing. Please refresh and retry." });
   return user.organizationId;
 }
+
+const activeEvaluations = new Set<number>();
+const evaluationLastStarted = new Map<number, number>();
 
 async function assertWorkspaceTrade(tradeId: number, user: { id: number; role: "trader" | "reviewer"; organizationId?: number | null }) {
   const trade = await getTradeById(tradeId);
@@ -306,6 +313,12 @@ export const operationsRouter = router({
     }),
   }),
   integrations: router({
+    gmail: router({
+      status: protectedProcedure.query(({ ctx }) => gmailStatus(ctx.user)),
+      connect: protectedProcedure.mutation(({ ctx }) => beginGmail(ctx.user)),
+      sync: protectedProcedure.input(z.object({ tradeId: z.number().int().positive(), query: z.string().trim().min(3).max(500), pageToken: z.string().max(1000).optional() })).mutation(({ ctx, input }) => syncGmail(ctx.user, input)),
+      disconnect: protectedProcedure.mutation(({ ctx }) => disconnectGmail(ctx.user)),
+    }),
     catalog: protectedProcedure.query(() => providerCatalog),
     mappings: protectedProcedure.query(({ ctx }) => listImportMappingsForUser({ userId: ctx.user.id, role: ctx.user.role, organizationId: workspaceId(ctx.user) })),
     list: protectedProcedure.query(({ ctx }) => { requireArcwayRole("reviewer", ctx.user.role); return listIntegrationOperations(workspaceId(ctx.user)); }),
@@ -319,6 +332,8 @@ export const operationsRouter = router({
     runMock: protectedProcedure.input(z.object({ integrationId: z.number().int().positive(), providerType: z.enum(["email", "storage", "erp", "carrier", "visibility", "ebl", "compliance", "payment", "finance", "identity"]), tradeId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
       requireArcwayRole("reviewer", ctx.user.role);
       const trade = await assertWorkspaceTrade(input.tradeId, ctx.user);
+      const integration = (await listIntegrationOperations(workspaceId(ctx.user))).integrations.find(item => item.id === input.integrationId && item.providerType === input.providerType);
+      if (!integration) throw new TRPCError({ code: "NOT_FOUND", message: "Sample adapter not found in this workspace." });
       const normalized = simulateProviderRun(input.providerType, trade.reference);
       await recordIntegrationRun({ organizationId: workspaceId(ctx.user), integrationId: input.integrationId, runType: "operator_mock_ingestion", status: "completed", inputSummary: { tradeReference: trade.reference }, outputSummary: normalized.output });
       await recordExternalReference({ organizationId: workspaceId(ctx.user), tradeId: trade.id, entityType: normalized.entityType, providerName: input.providerType, externalId: normalized.externalId, payload: normalized.output, observedAt: new Date() });
@@ -328,7 +343,7 @@ export const operationsRouter = router({
       if (input.sourceType === "webhook") requireArcwayRole("reviewer", ctx.user.role); else requireArcwayRole("trader", ctx.user.role);
       const trade = input.tradeId ? await assertWorkspaceTrade(input.tradeId, ctx.user) : undefined;
       if (input.base64 && (!input.fileName || !input.mimeType)) throw new TRPCError({ code: "BAD_REQUEST", message: "A file name and MIME type are required for attachment intake." });
-      const buffer = input.base64 ? Buffer.from(input.base64, "base64") : undefined;
+      const buffer = input.base64 ? decodeUpload(input.base64, input.mimeType!) : undefined;
       if (buffer && (!buffer.length || buffer.length > 10_000_000)) throw new TRPCError({ code: "BAD_REQUEST", message: "Source files must be between 1 byte and 10 MB." });
       const payloadHash = createHash("sha256").update(input.base64 ?? JSON.stringify(input.payload ?? {})).digest("hex");
       const stored = buffer && input.fileName && input.mimeType ? await storagePut(`ingestion/${workspaceId(ctx.user)}/${trade?.id ?? "unlinked"}/${Date.now()}-${input.fileName.replace(/[^a-zA-Z0-9._-]/g, "_")}`, buffer, input.mimeType) : undefined;
@@ -481,6 +496,24 @@ export const operationsRouter = router({
     }),
   }),
   monitoring: router({
+    aiEvaluation: protectedProcedure.query(async ({ ctx }) => {
+      requireArcwayRole("reviewer", ctx.user.role);
+      return { providers: getDocumentProviders(false).map(provider => ({ provider, model: getAIProviderConfig(provider).model })), report: await latestAiEvaluation(workspaceId(ctx.user)) };
+    }),
+    runAiEvaluation: protectedProcedure.input(z.object({ provider: z.enum(["gemini", "groq"]) })).mutation(async ({ ctx, input }) => {
+      requireArcwayRole("reviewer", ctx.user.role);
+      const organizationId = workspaceId(ctx.user);
+      if (!getDocumentProviders(false).includes(input.provider)) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Configure this provider's API key first." });
+      if (activeEvaluations.has(organizationId) || Date.now() - (evaluationLastStarted.get(organizationId) ?? 0) < 60_000) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "An evaluation is running or just started. Wait a minute before trying again." });
+      activeEvaluations.add(organizationId);
+      evaluationLastStarted.set(organizationId, Date.now());
+      try {
+        const report = await runAiEvaluation(input.provider);
+        await saveAiEvaluation(organizationId, report);
+        await appendAuditRecord({ organizationId, actorId: ctx.user.id, action: "ai.evaluated", objectType: "ai_evaluation", objectId: report.id, afterState: { provider: input.provider, suite: report.suite, completedCases: report.completedCases, f1: report.f1 }, reason: "Reviewer ran the synthetic document extraction benchmark" });
+        return report;
+      } finally { activeEvaluations.delete(organizationId); }
+    }),
     deterministicEvaluation: protectedProcedure.query(async ({ ctx }) => {
       requireArcwayRole("reviewer", ctx.user.role);
       return runDeterministicEvaluation();
@@ -491,20 +524,14 @@ export const operationsRouter = router({
     }),
     operationalSchedule: protectedProcedure.query(async ({ ctx }) => {
       requireArcwayRole("reviewer", ctx.user.role);
-      return getOperationalSchedule("operational-sweep");
+      return getOperationalSchedule(`workspace-sweep-${workspaceId(ctx.user)}`);
     }),
-    configureOperationalSchedule: protectedProcedure.input(z.object({ cronExpression: z.string().refine(isValidSixFieldUtcCron, "Use a six-field UTC cron expression.") })).mutation(async ({ ctx, input }) => {
+    configureOperationalSchedule: protectedProcedure.input(z.object({ cronExpression: z.string().max(80).refine(isValidSixFieldUtcCron, "Use a valid six-field UTC cron expression."), enabled: z.boolean().default(true) })).mutation(async ({ ctx, input }) => {
       requireArcwayRole("reviewer", ctx.user.role);
-      const sessionToken = parseCookieHeader(ctx.req.headers.cookie ?? "")[COOKIE_NAME];
-      if (!sessionToken) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sign in again before configuring the production operational schedule." });
-      const existing = await getOperationalSchedule("operational-sweep");
-      const job = existing?.taskUid
-        ? await updateHeartbeatJob(existing.taskUid, { cron: input.cronExpression, enable: true }, sessionToken)
-        : await createHeartbeatJob({ name: "arcway-operational-sweep", cron: input.cronExpression, path: "/api/scheduled/operationalSweep", description: "Runs ARCWAY obligation SLA escalation and source-health monitoring." }, sessionToken);
-      const taskUid = existing?.taskUid ?? (job as { taskUid: string }).taskUid;
-      await registerOperationalSchedule({ scheduleKey: "operational-sweep", taskUid, cronExpression: input.cronExpression });
-      await appendAuditRecord({ organizationId: workspaceId(ctx.user), actorId: ctx.user.id, action: "operational_schedule.configured", objectType: "operational_schedule", objectId: taskUid, afterState: { cronExpression: input.cronExpression, taskUid }, reason: "Reviewer configured project operational sweep" });
-      return { taskUid, nextExecutionAt: job.nextExecutionAt ?? null };
+      const organizationId = workspaceId(ctx.user);
+      const result = await configureWorkspaceSchedule(organizationId, input.cronExpression, input.enabled);
+      await appendAuditRecord({ organizationId, actorId: ctx.user.id, action: "operational_schedule.configured", objectType: "operational_schedule", objectId: result.taskUid, afterState: input, reason: "Reviewer configured workspace operational sweep" });
+      return result;
     }),
     updateAlertPolicy: protectedProcedure.input(z.object({ alertType: z.enum(["source_failure", "source_health", "obligation_sla"]), enabled: z.boolean(), severity: z.enum(["critical", "warning", "information"]), threshold: z.number().int().min(1).max(720) })).mutation(async ({ ctx, input }) => {
       requireArcwayRole("reviewer", ctx.user.role); const organizationId = workspaceId(ctx.user);
@@ -514,7 +541,7 @@ export const operationsRouter = router({
     }),
     runOperationalSweep: protectedProcedure.mutation(async ({ ctx }) => {
       requireArcwayRole("reviewer", ctx.user.role);
-      const [obligations, sourceHealth] = await Promise.all([runObligationEscalationSweep(), runSourceHealthSweep()]);
+      const { obligations, sourceHealth } = await runWorkspaceOperationalSweep(workspaceId(ctx.user));
       await appendAuditRecord({ organizationId: workspaceId(ctx.user), actorId: ctx.user.id, action: "monitoring.operational_sweep", objectType: "automation", objectId: "operational-sweep", afterState: { obligations, sourceHealth }, reason: "Reviewer-triggered operational sweep" });
       return { obligations, sourceHealth };
     }),
@@ -547,13 +574,13 @@ export const operationsRouter = router({
       const id = await createGeneratedDocument({ tradeId: input.tradeId, documentType: input.documentType, templateVersion: "arcway-core-1", dataSnapshot: snapshot, renderedContent, contentHash: createHash("sha256").update(renderedContent).digest("hex"), issuedBy: input.issueNow ? ctx.user.id : undefined, status: input.issueNow ? "issued" : "draft" });
       return { id, renderedContent, status: input.issueNow ? "issued" : "draft" };
     }),
-    correctExtraction: protectedProcedure.input(z.object({ documentId: z.number().int().positive(), reviewerNotes: z.string().min(6), extractedData: z.record(z.string(), z.unknown()) })).mutation(async ({ ctx, input }) => {
+    correctExtraction: protectedProcedure.input(z.object({ documentId: z.number().int().positive(), reviewerNotes: z.string().min(6).max(2000), extractedData: extractionValidator })).mutation(async ({ ctx, input }) => {
       requireArcwayRole("reviewer", ctx.user.role);
       const document = await getDocumentById(input.documentId);
       if (!document) throw new TRPCError({ code: "NOT_FOUND", message: "Evidence record not found." });
       await assertWorkspaceTrade(document.tradeId, ctx.user);
-      await correctDocumentExtraction({ ...input, reviewerId: ctx.user.id });
-      return { success: true };
+      const result = await correctDocumentExtraction({ ...input, reviewerId: ctx.user.id });
+      return { success: true, ...result };
     }),
   }),
 });

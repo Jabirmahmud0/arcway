@@ -11,6 +11,7 @@ build/
 .env
 .env.*
 !.env.example
+!.env.production.example
 # (commit .env.example as a template with placeholder values)
 
 # IDE and editor files
@@ -39,6 +40,7 @@ pnpm-debug.log*
 lerna-debug.log*
 
 # Runtime data
+.data/
 pids
 *.pid
 *.seed

@@ -29,6 +29,7 @@ export type ExtractedTradeFields = {
   shipmentDate: string;
   confidence: number;
   issues: string[];
+  extractionMeta?: { provider: "gemini" | "groq"; model: string; promptVersion: string; extractedAt: string; inputHash: string; durationMs: number };
 };
 
 export type TrustScore = {

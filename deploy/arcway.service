@@ -1,0 +1,24 @@
+[Unit]
+Description=ARCWAY trade assurance
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=arcway
+Group=arcway
+WorkingDirectory=/opt/arcway
+EnvironmentFile=/etc/arcway/arcway.env
+ExecStart=/usr/bin/node /opt/arcway/dist/index.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=45
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/arcway
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

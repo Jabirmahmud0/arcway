@@ -1,0 +1,46 @@
+name: Validate ARCWAY
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    env:
+      DATABASE_URL: postgresql://arcway:ci-only-password@localhost:5432/arcway_ci?sslmode=disable
+      PGHOST: localhost
+      PGUSER: arcway
+      PGPASSWORD: ci-only-password
+      VITE_CLERK_PUBLISHABLE_KEY: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Prepare native PostgreSQL
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-16 postgresql-client-16
+          sudo systemctl start postgresql
+          sudo -u postgres psql -c "CREATE ROLE arcway WITH LOGIN PASSWORD 'ci-only-password' CREATEDB;"
+          sudo -u postgres createdb -O arcway arcway_ci
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm test
+      - run: pnpm build
+      - run: pnpm db:migrate
+      - name: Backup and restore drill against isolated PostgreSQL
+        run: |
+          export PATH="/usr/lib/postgresql/16/bin:$PATH"
+          mkdir -p .data/uploads/ci
+          printf 'private backup fixture' > .data/uploads/ci/evidence.txt
+          pnpm backup
+          createdb arcway_restore
+          export RESTORE_DATABASE_URL='postgresql://arcway:ci-only-password@localhost:5432/arcway_restore?sslmode=disable'
+          export RESTORE_DATA_DIR="$PWD/.data/restore-drill"
+          BACKUP_PATH=$(find .data/backups -mindepth 1 -maxdepth 1 -type d | head -1)
+          pnpm backup:restore --backup="$BACKUP_PATH"
+          cmp .data/uploads/ci/evidence.txt .data/restore-drill/uploads/ci/evidence.txt

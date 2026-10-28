@@ -23,6 +23,14 @@ const alertQualityCenter = readFileSync(fileURLToPath(new URL("../client/src/pag
 const deterministicEvaluationCenter = readFileSync(fileURLToPath(new URL("../client/src/pages/DeterministicEvaluationCenter.tsx", import.meta.url)), "utf8");
 const exceptionResolutionCenter = readFileSync(fileURLToPath(new URL("../client/src/pages/ExceptionResolutionCenter.tsx", import.meta.url)), "utf8");
 
+// Check the navigation contract without depending on formatter line breaks.
+function expectReviewerOnlyNavigation(label: string, path: string) {
+  const entry = dashboardShell.match(new RegExp(`\\{[^}]*label: "${label}"[^}]*\\}`))?.[0];
+  expect(entry).toBeDefined();
+  expect(entry).toContain(`path: "${path}"`);
+  expect(entry).toContain("reviewerOnly: true");
+}
+
 describe("secure guest portal accessibility contract", () => {
   it("retains explicit labels for each scoped action and accessible names for icon-only evidence controls", () => {
     expect(source).toContain('htmlFor="cargo-ready-date"');
@@ -37,7 +45,7 @@ describe("secure guest portal accessibility contract", () => {
 
   it("retains a visible global focus indicator for keyboard-reachable controls", () => {
     expect(globalStyles).toContain("button:focus-visible");
-    expect(globalStyles).toContain("outline: 2px solid #4da3ff");
+    expect(globalStyles).toContain("outline: 2px solid var(--color-ring)");
   });
 
   it("retains dashboard skip navigation, a main-content target, and a labelled mobile navigation dialog", () => {
@@ -48,7 +56,7 @@ describe("secure guest portal accessibility contract", () => {
   });
 
   it("keeps the protected Governance route marked as Reviewer-only in workspace navigation", () => {
-    expect(dashboardShell).toContain('{ label: "Governance", path: "/governance", icon: Settings2, reviewerOnly: true }');
+    expectReviewerOnlyNavigation("Governance", "/governance");
   });
 
   it("keeps protected integration operations disabled for Trader clients while retaining scoped mapping creation", () => {
@@ -123,7 +131,7 @@ describe("secure guest portal accessibility contract", () => {
   it("keeps retained-source alias review disabled for Trader clients and hidden behind Reviewer-only navigation", () => {
     expect(sourceAliasReviewCenter).toContain('enabled: reviewer');
     expect(sourceAliasReviewCenter).toContain('Source alias review is Reviewer-controlled');
-    expect(dashboardShell).toContain('{ label: "Source Alias Review", path: "/source-alias-review", icon: FileSearch, reviewerOnly: true }');
+    expectReviewerOnlyNavigation("Source Alias Review", "/source-alias-review");
   });
 
   it("keeps Alert Quality disabled for Trader clients and hidden behind Reviewer-only navigation", () => {
@@ -133,7 +141,7 @@ describe("secure guest portal accessibility contract", () => {
     expect(alertQualityCenter).toContain('href={`/exceptions?tradeId=${reference.tradeId}&exceptionId=${reference.exceptionId}`}');
     expect(exceptionResolutionCenter).toContain('new URLSearchParams(window.location.search)');
     expect(exceptionResolutionCenter).toContain('validHandoffExceptionId');
-    expect(dashboardShell).toContain('{ label: "Alert Quality", path: "/alert-quality", icon: BarChart3, reviewerOnly: true }');
+    expectReviewerOnlyNavigation("Alert Quality", "/alert-quality");
   });
 
   it("keeps deterministic evaluation disabled for Trader clients and hidden behind Reviewer-only navigation", () => {
@@ -141,6 +149,6 @@ describe("secure guest portal accessibility contract", () => {
     expect(deterministicEvaluationCenter).toContain('Deterministic evaluation is Reviewer-controlled');
     expect(deterministicEvaluationCenter).toContain('Versioned evaluation manifest');
     expect(deterministicEvaluationCenter).toContain('Stable fingerprint');
-    expect(dashboardShell).toContain('{ label: "Evaluation", path: "/deterministic-evaluation", icon: FlaskConical, reviewerOnly: true }');
+    expectReviewerOnlyNavigation("Evaluation", "/deterministic-evaluation");
   });
 });

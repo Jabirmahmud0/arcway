@@ -11,6 +11,7 @@ import { buildOwnerNotification } from "../ownerNotifications";
 import { assertDocumentTransition } from "../documentWorkflow";
 import { protectedProcedure, router } from "../_core/trpc";
 import { storagePut } from "../storage";
+import { decodeUpload } from "../uploadValidation";
 import { extractDocumentFields } from "../services/documentIntelligence";
 import { calculateTrustScore, findCrossDocumentInconsistencies, REQUIRED_DOCUMENT_TYPES } from "../tradeDomain";
 import { evaluatePreflight } from "../preflight";
@@ -159,22 +160,19 @@ export const tradeRouter = router({
       const document = await getDocumentById(input.documentId);
       if (!document) throw new TRPCError({ code: "NOT_FOUND", message: "Document record not found." });
       const trade = await assertTradeAccess({ tradeId: document.tradeId, user: ctx.user });
-      const buffer = Buffer.from(input.base64, "base64");
-      if (!buffer.length || buffer.length > 10_000_000) throw new TRPCError({ code: "BAD_REQUEST", message: "Files must be between 1 byte and 10 MB." });
+      const buffer = decodeUpload(input.base64, input.mimeType);
       const safeName = input.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
       const stored = await storagePut(`trades/${trade.id}/${document.documentType.replace(/[^a-z0-9]+/gi, "-")}/${Date.now()}-${safeName}`, buffer, input.mimeType);
       const fields = await extractDocumentFields({ buffer, mimeType: input.mimeType, documentType: document.documentType });
       const others = await getTradeDocuments(trade.id);
-      const extracted = others.map(item => item.extractedData).filter((item): item is Record<string, unknown> => Boolean(item)).map(item => item as typeof fields);
+      const extracted = others.filter(item => item.id !== document.id).map(item => item.extractedData).filter((item): item is Record<string, unknown> => Boolean(item)).map(item => item as typeof fields);
       const inconsistencies = [...fields.issues, ...findCrossDocumentInconsistencies(fields, extracted)];
-      await updateDocumentUpload({ documentId: document.id, userId: ctx.user.id, fileName: input.fileName, fileKey: stored.key, fileUrl: stored.url, mimeType: input.mimeType, extractedData: fields, inconsistencies });
+      const reconciliation = await updateDocumentUpload({ documentId: document.id, userId: ctx.user.id, fileName: input.fileName, fileKey: stored.key, fileUrl: stored.url, mimeType: input.mimeType, extractedData: fields, inconsistencies });
       await appendTradeEvent({ tradeId: trade.id, actorId: ctx.user.id, eventType: "evidence.received", title: `${document.documentType} uploaded`, detail: inconsistencies.length ? `${inconsistencies.length} consistency flag(s) require reviewer attention.` : "Document saved and structured fields extracted." });
       if (inconsistencies.length) {
-        await createInconsistencyExceptions({ tradeId: trade.id, documentId: document.id, issues: inconsistencies });
         await notifyOwner(buildOwnerNotification({ type: "document_inconsistent", reference: trade.reference, documentType: document.documentType, count: inconsistencies.length }));
       }
-      const trust = await refreshScore(trade.id);
-      return { success: true, fields, inconsistencies, trust };
+      return { success: true, fields, ...reconciliation };
     }),
     review: protectedProcedure.input(z.object({ documentId: z.number().int().positive(), status: z.enum(["under review", "verified", "rejected"]), reviewerNotes: z.string().max(2000).optional() })).mutation(async ({ ctx, input }) => {
       requireArcwayRole("reviewer", ctx.user.role);

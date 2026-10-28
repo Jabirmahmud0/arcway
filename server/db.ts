@@ -1,5 +1,9 @@
-import { and, desc, eq, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
+import { randomUUID } from "node:crypto";
+import { nextUtcExecution } from "./operationalSchedule";
+import "dotenv/config";
+import { Pool } from "pg";
+import { and, desc, eq, isNotNull, isNull, like, sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/node-postgres";
 import {
   memberships,
   organizations,
@@ -55,13 +59,51 @@ import { shouldEscalateSourceHealth } from "./alertPolicy";
 import { buildPolicyObligationPreview } from "./policyApplication";
 import { buildHistoricalShadowReview } from "./shadowAuditReview";
 import { redactRoutingContextForRole } from "./sourceReceiptVisibility";
+import { buildDocumentEvidence, DOCUMENT_EVIDENCE_PIPELINE } from "./documentEvidence";
+import { calculateTrustScore, findCrossDocumentInconsistencies, type ExtractedTradeFields } from "./tradeDomain";
+import { evaluatePreflight } from "./preflight";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+
+export async function getStoredFileForUser(key: string, user: { id: number; role: "trader" | "reviewer"; organizationId?: number | null }) {
+  const db = await getDb();
+  if (!db || !user.organizationId || !key) return undefined;
+  const scope = and(eq(trades.organizationId, user.organizationId), user.role === "trader" ? eq(trades.ownerId, user.id) : undefined);
+  const [document] = await db.select({ fileName: tradeDocuments.fileName }).from(tradeDocuments).innerJoin(trades, eq(trades.id, tradeDocuments.tradeId)).where(and(eq(tradeDocuments.fileKey, key), scope)).limit(1);
+  if (document) return document;
+  const [version] = await db.select({ fileName: tradeDocumentVersions.fileName }).from(tradeDocumentVersions).innerJoin(trades, eq(trades.id, tradeDocumentVersions.tradeId)).where(and(eq(tradeDocumentVersions.fileKey, key), scope)).limit(1);
+  if (version) return version;
+  const [receipt] = await db.select().from(sourceIngestionReceipts).where(and(eq(sourceIngestionReceipts.fileKey, key), eq(sourceIngestionReceipts.organizationId, user.organizationId))).limit(1);
+  if (!receipt) return undefined;
+  if (user.role === "reviewer") return { fileName: receipt.fileName };
+  if (!receipt.tradeId) return receipt.createdBy === user.id ? { fileName: receipt.fileName } : undefined;
+  const [trade] = await db.select({ id: trades.id }).from(trades).where(and(eq(trades.id, receipt.tradeId), scope)).limit(1);
+  return trade ? { fileName: receipt.fileName } : undefined;
+}
+
+export async function saveGmailReceipt(input: { organizationId: number; tradeId: number; createdBy: number; payloadHash: string; fileName: string; rawPayload: unknown; fileKey?: string; fileUrl?: string; mimeType?: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  return db.transaction(async tx => {
+    const [trade] = await tx.select().from(trades).where(and(eq(trades.id, input.tradeId), eq(trades.organizationId, input.organizationId))).for("update");
+    if (!trade) throw new Error("Trade not found");
+    const [existing] = await tx.select({ id: sourceIngestionReceipts.id }).from(sourceIngestionReceipts).where(and(eq(sourceIngestionReceipts.organizationId, input.organizationId), eq(sourceIngestionReceipts.payloadHash, input.payloadHash))).limit(1);
+    if (existing) return false;
+    await tx.insert(sourceIngestionReceipts).values({ ...input, sourceType: "email_attachment", normalizedStatus: "normalized", routingStatus: "routed", normalizedAt: new Date() });
+    return true;
+  });
+}
 
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      const connectionString = process.env.DATABASE_URL;
+      if (!/^postgres(?:ql)?:\/\//.test(connectionString)) {
+        throw new Error("DATABASE_URL must be a PostgreSQL connection string (Neon).");
+      }
+      const pool = new Pool({ connectionString, max: 10, idleTimeoutMillis: 30_000, connectionTimeoutMillis: 15_000 });
+      pool.on("error", () => console.error("[Database] An idle PostgreSQL connection failed."));
+      _db = drizzle(pool);
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
@@ -75,25 +117,26 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   const db = await getDb();
   if (!db) return;
   const role = user.role ?? (user.openId === ENV.ownerOpenId ? "reviewer" : "trader");
-  await db.insert(users).values({
-    openId: user.openId,
-    name: user.name ?? null,
-    email: user.email ?? null,
-    loginMethod: user.loginMethod ?? null,
-    role,
-    lastSignedIn: user.lastSignedIn ?? new Date(),
-  }).onDuplicateKeyUpdate({
-    set: { name: user.name ?? null, email: user.email ?? null, loginMethod: user.loginMethod ?? null, role, lastSignedIn: new Date() },
+  await db.transaction(async tx => {
+    await tx.insert(users).values({
+      openId: user.openId, name: user.name ?? null, email: user.email ?? null,
+      loginMethod: user.loginMethod ?? null, role, lastSignedIn: user.lastSignedIn ?? new Date(),
+    }).onConflictDoUpdate({ target: users.openId, set: {
+      ...(user.name !== undefined ? { name: user.name } : {}),
+      ...(user.email !== undefined ? { email: user.email } : {}),
+      ...(user.loginMethod !== undefined ? { loginMethod: user.loginMethod } : {}),
+      ...(user.role !== undefined || user.openId === ENV.ownerOpenId ? { role } : {}),
+      lastSignedIn: user.lastSignedIn ?? new Date(),
+    } });
+    const [persisted] = await tx.select().from(users).where(eq(users.openId, user.openId)).limit(1).for("update");
+    if (persisted && !persisted.organizationId) {
+      const slug = `workspace-${persisted.id}-${persisted.openId.slice(-8).toLowerCase()}`;
+      const [organization] = await tx.insert(organizations).values({ name: `${persisted.name || "ARCWAY"} Workspace`, slug }).returning({ id: organizations.id });
+      await tx.update(users).set({ organizationId: organization.id }).where(eq(users.id, persisted.id));
+      await tx.insert(memberships).values({ organizationId: organization.id, userId: persisted.id, role: persisted.role });
+      await tx.update(trades).set({ organizationId: organization.id }).where(eq(trades.ownerId, persisted.id));
+    }
   });
-  const [persisted] = await db.select().from(users).where(eq(users.openId, user.openId)).limit(1);
-  if (persisted && !persisted.organizationId) {
-    const slug = `workspace-${persisted.id}-${persisted.openId.slice(-8).toLowerCase()}`;
-    const result = await db.insert(organizations).values({ name: `${persisted.name || "ARCWAY"} Workspace`, slug });
-    const organizationId = Number(result[0].insertId);
-    await db.update(users).set({ organizationId }).where(eq(users.id, persisted.id));
-    await db.insert(memberships).values({ organizationId, userId: persisted.id, role: persisted.role });
-    await db.update(trades).set({ organizationId }).where(eq(trades.ownerId, persisted.id));
-  }
 }
 
 export async function getUserByOpenId(openId: string) {
@@ -124,8 +167,8 @@ export async function createTrade(input: {
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  const result = await db.insert(trades).values(input);
-  return Number(result[0].insertId);
+  const result = await db.insert(trades).values(input).returning({ id: trades.id });
+  return Number(result[0].id);
 }
 
 export async function createDocumentPlaceholders(tradeId: number) {
@@ -193,7 +236,43 @@ export async function getTradeWorkspace(tradeId: number) {
   const shipmentRows = shipmentIds.length ? await db.select().from(shipments).where(sql`${shipments.id} in (${sql.join(shipmentIds.map(id => sql`${id}`), sql`, `)})`) : [];
   const shipmentEventsRows = shipmentIds.length ? await db.select().from(shipmentEvents).where(sql`${shipmentEvents.shipmentId} in (${sql.join(shipmentIds.map(id => sql`${id}`), sql`, `)})`).orderBy(desc(shipmentEvents.createdAt)) : [];
   const paymentRows = await db.select().from(paymentRecords).where(eq(paymentRecords.tradeId, tradeId)).orderBy(desc(paymentRecords.recordedAt));
-  return { trade, documents, documentVersions, events, exceptions, obligations, obligationDependencies: obligationDependenciesRows, obligationEscalations: obligationEscalationsRows, lines, revisions, fields, canonicalResolutions: resolutionRows, preflightRuns: runs, shipmentLinks, shipments: shipmentRows, shipmentEvents: shipmentEventsRows, paymentTerms: terms, paymentRecords: paymentRows, approvals: decisions, comments: discussion, tasks, generatedDocuments: drafts, preflightWaivers: waivers };
+  return { trade, documents, documentVersions, events, exceptions, obligations, obligationDependencies: obligationDependenciesRows, obligationEscalations: obligationEscalationsRows, lines, revisions, fields: fields.filter(field => !field.validTo), fieldHistory: fields, canonicalResolutions: resolutionRows, preflightRuns: runs, shipmentLinks, shipments: shipmentRows, shipmentEvents: shipmentEventsRows, paymentTerms: terms, paymentRecords: paymentRows, approvals: decisions, comments: discussion, tasks, generatedDocuments: drafts, preflightWaivers: waivers };
+}
+
+type EvidenceWriter = Pick<NonNullable<Awaited<ReturnType<typeof getDb>>>, "select" | "insert" | "update">;
+
+async function syncDocumentEvidence(tx: EvidenceWriter, document: typeof tradeDocuments.$inferSelect, version?: Parameters<typeof buildDocumentEvidence>[1], dryRun = false) {
+  const rows = buildDocumentEvidence(document, version);
+  const scope = and(eq(evidenceFields.documentId, document.id), eq(evidenceFields.modelVersion, DOCUMENT_EVIDENCE_PIPELINE), isNull(evidenceFields.validTo));
+  const current = await tx.select().from(evidenceFields).where(scope);
+  // Idempotent backfills must preserve evidence IDs referenced by reviewer decisions.
+  const unchanged = current.length === rows.length && rows.every(row => current.some(existing =>
+    existing.fieldName === row.fieldName && existing.fieldValue === row.fieldValue && existing.confidence === row.confidence && Object.entries(row.sourceLocation).every(([key, value]) => (existing.sourceLocation as Record<string, unknown> | null)?.[key] === value)
+  ));
+  if (unchanged) return { inserted: 0, retired: 0 };
+  if (dryRun) return { inserted: rows.length, retired: current.length };
+  if (current.length) await tx.update(evidenceFields).set({ validTo: new Date() }).where(scope);
+  if (rows.length) await tx.insert(evidenceFields).values(rows);
+  return { inserted: rows.length, retired: current.length };
+}
+
+export async function backfillDocumentEvidence(options: { dryRun?: boolean } = {}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const documents = await db.select({ id: tradeDocuments.id }).from(tradeDocuments).where(and(isNotNull(tradeDocuments.fileKey), isNotNull(tradeDocuments.extractedData)));
+  const summary = { documents: documents.length, inserted: 0, retired: 0, dryRun: Boolean(options.dryRun) };
+  for (const item of documents) {
+    const result = await db.transaction(async tx => {
+      // Same row lock as uploads: a replacement cannot race the backfill.
+      const [document] = await tx.select().from(tradeDocuments).where(eq(tradeDocuments.id, item.id)).for("update");
+      if (!document?.fileKey) return { inserted: 0, retired: 0 };
+      const [version] = await tx.select().from(tradeDocumentVersions).where(and(eq(tradeDocumentVersions.documentId, item.id), eq(tradeDocumentVersions.fileKey, document.fileKey!))).orderBy(desc(tradeDocumentVersions.version)).limit(1);
+      return syncDocumentEvidence(tx, document, version, options.dryRun);
+    });
+    summary.inserted += result.inserted;
+    summary.retired += result.retired;
+  }
+  return summary;
 }
 
 export async function createEvidenceFields(input: Array<{ tradeId: number; documentId?: number; fieldName: string; fieldValue: string; authority?: "canonical" | "authoritative" | "supporting" | "conflicting"; confidence?: string; sourceLocation?: Record<string, unknown>; modelVersion?: string }>) {
@@ -212,8 +291,8 @@ export async function createPreflightRun(input: { tradeId: number; gate: string;
 export async function createPreflightWaiver(input: { tradeId: number; policyVersionId?: number; ruleKey: string; reason: string; expiresAt: Date; approvedBy: number }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  const result = await db.insert(preflightWaivers).values(input);
-  return Number(result[0].insertId);
+  const result = await db.insert(preflightWaivers).values(input).returning({ id: preflightWaivers.id });
+  return Number(result[0].id);
 }
 
 export async function revokePreflightWaiver(id: number) {
@@ -225,8 +304,8 @@ export async function revokePreflightWaiver(id: number) {
 export async function createObligationTemplate(input: { organizationId: number; name: string; actor: string; action: string; evidenceRequirement?: string; criticality?: "critical" | "warning" | "information"; dueOffsetHours?: number; releaseCondition?: unknown; createdBy: number }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  const result = await db.insert(obligationTemplates).values({ ...input, criticality: input.criticality ?? "information", active: 1 });
-  return Number(result[0].insertId);
+  const result = await db.insert(obligationTemplates).values({ ...input, criticality: input.criticality ?? "information", active: 1 }).returning({ id: obligationTemplates.id });
+  return Number(result[0].id);
 }
 
 export async function listObligationTemplates(organizationId: number) {
@@ -238,8 +317,8 @@ export async function listObligationTemplates(organizationId: number) {
 export async function createTradeObligation(input: { tradeId: number; actor: string; action: string; evidenceRequirement?: string; deadline?: Date; criticality?: "critical" | "warning" | "information"; source?: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  const result = await db.insert(tradeObligations).values({ ...input, criticality: input.criticality ?? "information", status: "open" });
-  return Number(result[0].insertId);
+  const result = await db.insert(tradeObligations).values({ ...input, criticality: input.criticality ?? "information", status: "open" }).returning({ id: tradeObligations.id });
+  return Number(result[0].id);
 }
 
 export async function createCanonicalResolution(input: { tradeId: number; fieldName: string; selectedEvidenceFieldId?: number; selectedValue: string; conflictingEvidenceFieldIds?: number[]; rationale: string; policyContext?: unknown; resolvedBy: number }) {
@@ -247,8 +326,8 @@ export async function createCanonicalResolution(input: { tradeId: number; fieldN
   if (!db) throw new Error("Database unavailable");
   const prior = (await db.select().from(canonicalResolutions).where(sql`${canonicalResolutions.tradeId} = ${input.tradeId} and ${canonicalResolutions.fieldName} = ${input.fieldName} and ${canonicalResolutions.active} = 1`).orderBy(desc(canonicalResolutions.resolvedAt)).limit(1))[0];
   if (prior) await db.update(canonicalResolutions).set({ active: 0 }).where(eq(canonicalResolutions.id, prior.id));
-  const result = await db.insert(canonicalResolutions).values({ ...input, previousResolutionId: prior?.id, conflictingEvidenceFieldIds: input.conflictingEvidenceFieldIds ?? null, active: 1 });
-  return Number(result[0].insertId);
+  const result = await db.insert(canonicalResolutions).values({ ...input, previousResolutionId: prior?.id, conflictingEvidenceFieldIds: input.conflictingEvidenceFieldIds ?? null, active: 1 }).returning({ id: canonicalResolutions.id });
+  return Number(result[0].id);
 }
 
 export async function addObligationDependency(input: { obligationId: number; dependsOnObligationId: number; dependencyType?: "blocks_release" | "blocks_task" | "evidence_prerequisite" }) {
@@ -280,15 +359,15 @@ export async function listOrganizationMasters(organizationId: number) {
 export async function createCounterparty(input: { organizationId: number; legalName: string; countryCode: string; tradingNames?: unknown; contacts?: unknown; defaultTerms?: unknown; requiredCertificates?: unknown }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  const result = await db.insert(counterparties).values(input);
-  return Number(result[0].insertId);
+  const result = await db.insert(counterparties).values(input).returning({ id: counterparties.id });
+  return Number(result[0].id);
 }
 
 export async function createProduct(input: { organizationId: number; sku: string; description: string; buyerSku?: string; countryOfOrigin?: string; hsClassification?: string; leadTimeDays?: number; certifications?: unknown }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  const result = await db.insert(products).values(input);
-  return Number(result[0].insertId);
+  const result = await db.insert(products).values(input).returning({ id: products.id });
+  return Number(result[0].id);
 }
 
 export async function createCounterpartyVersion(input: { organizationId: number; sourceId: number; legalName?: string; countryCode?: string; tradingNames?: string[]; requiredCertificates?: unknown; contacts?: unknown; defaultTerms?: unknown }) {
@@ -298,8 +377,8 @@ export async function createCounterpartyVersion(input: { organizationId: number;
   if (!source) throw new Error("Counterparty master not found in this workspace");
   const now = new Date();
   await db.update(counterparties).set({ validTo: now }).where(eq(counterparties.id, source.id));
-  const result = await db.insert(counterparties).values({ organizationId: source.organizationId, legalName: input.legalName ?? source.legalName, tradingNames: input.tradingNames ?? source.tradingNames, countryCode: (input.countryCode ?? source.countryCode).toUpperCase(), taxId: source.taxId, addresses: source.addresses, contacts: input.contacts ?? source.contacts, bankDetails: source.bankDetails, defaultTerms: input.defaultTerms ?? source.defaultTerms, documentPreferences: source.documentPreferences, requiredCertificates: input.requiredCertificates ?? source.requiredCertificates, status: source.status, version: source.version + 1, supersedesCounterpartyId: source.id, validFrom: now });
-  return Number(result[0].insertId);
+  const result = await db.insert(counterparties).values({ organizationId: source.organizationId, legalName: input.legalName ?? source.legalName, tradingNames: input.tradingNames ?? source.tradingNames, countryCode: (input.countryCode ?? source.countryCode).toUpperCase(), taxId: source.taxId, addresses: source.addresses, contacts: input.contacts ?? source.contacts, bankDetails: source.bankDetails, defaultTerms: input.defaultTerms ?? source.defaultTerms, documentPreferences: source.documentPreferences, requiredCertificates: input.requiredCertificates ?? source.requiredCertificates, status: source.status, version: source.version + 1, supersedesCounterpartyId: source.id, validFrom: now }).returning({ id: counterparties.id });
+  return Number(result[0].id);
 }
 
 export async function createProductVersion(input: { organizationId: number; sourceId: number; description?: string; buyerSku?: string; countryOfOrigin?: string; hsClassification?: string; leadTimeDays?: number; certifications?: unknown }) {
@@ -309,15 +388,15 @@ export async function createProductVersion(input: { organizationId: number; sour
   if (!source) throw new Error("Product master not found in this workspace");
   const now = new Date();
   await db.update(products).set({ validTo: now }).where(eq(products.id, source.id));
-  const result = await db.insert(products).values({ organizationId: source.organizationId, sku: source.sku, buyerSku: input.buyerSku ?? source.buyerSku, description: input.description ?? source.description, variants: source.variants, countryOfOrigin: (input.countryOfOrigin ?? source.countryOfOrigin)?.toUpperCase(), hsClassification: input.hsClassification ?? source.hsClassification, dimensions: source.dimensions, netWeight: source.netWeight, grossWeight: source.grossWeight, packing: source.packing, leadTimeDays: input.leadTimeDays ?? source.leadTimeDays, certifications: input.certifications ?? source.certifications, complianceAttributes: source.complianceAttributes, version: source.version + 1, supersedesProductId: source.id, validFrom: now });
-  return Number(result[0].insertId);
+  const result = await db.insert(products).values({ organizationId: source.organizationId, sku: source.sku, buyerSku: input.buyerSku ?? source.buyerSku, description: input.description ?? source.description, variants: source.variants, countryOfOrigin: (input.countryOfOrigin ?? source.countryOfOrigin)?.toUpperCase(), hsClassification: input.hsClassification ?? source.hsClassification, dimensions: source.dimensions, netWeight: source.netWeight, grossWeight: source.grossWeight, packing: source.packing, leadTimeDays: input.leadTimeDays ?? source.leadTimeDays, certifications: input.certifications ?? source.certifications, complianceAttributes: source.complianceAttributes, version: source.version + 1, supersedesProductId: source.id, validFrom: now }).returning({ id: products.id });
+  return Number(result[0].id);
 }
 
 export async function createPolicyPack(input: { organizationId: number; name: string; scope: "company" | "counterparty" | "product" | "route" | "payment" | "transport" | "jurisdiction"; ownerId: number; rules: unknown; jurisdiction?: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  const policy = await db.insert(policyPacks).values({ organizationId: input.organizationId, name: input.name, scope: input.scope, status: "active", ownerId: input.ownerId });
-  const policyPackId = Number(policy[0].insertId);
+  const policy = await db.insert(policyPacks).values({ organizationId: input.organizationId, name: input.name, scope: input.scope, status: "active", ownerId: input.ownerId }).returning({ id: policyPacks.id });
+  const policyPackId = Number(policy[0].id);
   await db.insert(policyVersions).values({ policyPackId, version: 1, rules: input.rules, effectiveFrom: new Date(), jurisdiction: input.jurisdiction, createdBy: input.ownerId });
   return policyPackId;
 }
@@ -355,8 +434,8 @@ export async function createPolicyObligationBinding(input: { organizationId: num
     input.productId ? db.select().from(products).where(and(eq(products.id, input.productId), eq(products.organizationId, input.organizationId))).limit(1) : Promise.resolve([undefined]),
   ]);
   if (!policy[0] || !template[0] || (input.counterpartyId && !counterparty[0]) || (input.productId && !product[0])) throw new Error("Policy binding references an object outside this workspace");
-  const result = await db.insert(policyObligationBindings).values({ ...input, status: "active" });
-  return Number(result[0].insertId);
+  const result = await db.insert(policyObligationBindings).values({ ...input, status: "active" }).returning({ id: policyObligationBindings.id });
+  return Number(result[0].id);
 }
 
 export async function getPolicyObligationPreview(tradeId: number, organizationId: number) {
@@ -386,8 +465,8 @@ export async function getPolicyObligationPreview(tradeId: number, organizationId
 export async function createShipment(input: { organizationId: number; tradeId: number; mode: "sea" | "air" | "road" | "rail" | "multimodal"; carrier?: string; forwarder?: string; bookingReference?: string; origin?: string; destination?: string; etd?: Date; eta?: Date; vessel?: string; voyage?: string; allocatedQuantity?: string; allocatedValue?: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  const result = await db.insert(shipments).values({ organizationId: input.organizationId, mode: input.mode, carrier: input.carrier, forwarder: input.forwarder, bookingReference: input.bookingReference, origin: input.origin, destination: input.destination, etd: input.etd, eta: input.eta, vessel: input.vessel, voyage: input.voyage });
-  const shipmentId = Number(result[0].insertId);
+  const result = await db.insert(shipments).values({ organizationId: input.organizationId, mode: input.mode, carrier: input.carrier, forwarder: input.forwarder, bookingReference: input.bookingReference, origin: input.origin, destination: input.destination, etd: input.etd, eta: input.eta, vessel: input.vessel, voyage: input.voyage }).returning({ id: shipments.id });
+  const shipmentId = Number(result[0].id);
   await db.insert(shipmentAllocations).values({ shipmentId, tradeId: input.tradeId, allocatedQuantity: input.allocatedQuantity, allocatedValue: input.allocatedValue });
   return shipmentId;
 }
@@ -425,8 +504,8 @@ export async function recordPayment(input: { tradeId: number; paymentTermId?: nu
 export async function createApproval(input: { organizationId: number; tradeId?: number; exceptionId?: number; type: string; requestedBy: number; approverId?: number; reason: string; evidence?: unknown }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  const result = await db.insert(approvals).values(input);
-  return Number(result[0].insertId);
+  const result = await db.insert(approvals).values(input).returning({ id: approvals.id });
+  return Number(result[0].id);
 }
 
 export async function decideApproval(input: { approvalId: number; approverId: number; status: "approved" | "rejected"; decisionReason: string }) {
@@ -521,12 +600,12 @@ export async function connectIntegration(input: { organizationId: number; provid
     await db.update(integrations).set({ status: "connected", healthMessage: "Mock adapter ready for operator-run demonstration.", lastSyncedAt: new Date() }).where(eq(integrations.id, current[0].id));
     return current[0].id;
   }
-  const result = await db.insert(integrations).values({ ...input, status: "connected", configuration: { mode: "mock_adapter" }, healthMessage: "Mock adapter ready for operator-run demonstration.", lastSyncedAt: new Date() });
-  return Number(result[0].insertId);
+  const result = await db.insert(integrations).values({ ...input, status: "connected", configuration: { mode: "mock_adapter" }, healthMessage: "Mock adapter ready for operator-run demonstration.", lastSyncedAt: new Date() }).returning({ id: integrations.id });
+  return Number(result[0].id);
 }
 
-export async function openWorkflowAlert(input: { organizationId: number; integrationId?: number; integrationRunId?: number; alertType?: "source_failure" | "source_health" | "obligation_sla"; severity?: "critical" | "warning" | "information"; title: string; detail: string; dedupeKey?: string }) {
-  const db = await getDb();
+export async function openWorkflowAlert(input: { organizationId: number; integrationId?: number; integrationRunId?: number; alertType?: "source_failure" | "source_health" | "obligation_sla"; severity?: "critical" | "warning" | "information"; title: string; detail: string; dedupeKey?: string }, writer?: EvidenceWriter) {
+  const db = writer ?? await getDb();
   if (!db) throw new Error("Database unavailable");
   const policy = input.alertType ? (await db.select().from(workflowAlertPolicies).where(and(eq(workflowAlertPolicies.organizationId, input.organizationId), eq(workflowAlertPolicies.alertType, input.alertType))).limit(1))[0] : undefined;
   if (policy && policy.enabled !== 1) return 0;
@@ -536,15 +615,15 @@ export async function openWorkflowAlert(input: { organizationId: number; integra
     await db.update(workflowAlerts).set({ detail: input.detail, severity: effectiveSeverity, integrationId: input.integrationId ?? existing.integrationId, integrationRunId: input.integrationRunId ?? existing.integrationRunId, occurrenceCount: existing.occurrenceCount + 1, lastSeenAt: new Date(), status: existing.status === "resolved" ? "open" : existing.status, resolvedAt: null }).where(eq(workflowAlerts.id, existing.id));
     return existing.id;
   }
-  const result = await db.insert(workflowAlerts).values({ ...input, severity: effectiveSeverity, status: "open" });
-  return Number(result[0].insertId);
+  const result = await db.insert(workflowAlerts).values({ ...input, severity: effectiveSeverity, status: "open" }).returning({ id: workflowAlerts.id });
+  return Number(result[0].id);
 }
 
 export async function recordIntegrationRun(input: { organizationId: number; integrationId: number; runType: string; status: "completed" | "failed" | "skipped"; inputSummary?: unknown; outputSummary?: unknown; errorMessage?: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  const result = await db.insert(integrationRuns).values({ integrationId: input.integrationId, runType: input.runType, status: input.status, inputSummary: input.inputSummary, outputSummary: input.outputSummary, errorMessage: input.errorMessage, startedAt: new Date(), completedAt: new Date() });
-  const runId = Number(result[0].insertId);
+  const result = await db.insert(integrationRuns).values({ integrationId: input.integrationId, runType: input.runType, status: input.status, inputSummary: input.inputSummary, outputSummary: input.outputSummary, errorMessage: input.errorMessage, startedAt: new Date(), completedAt: new Date() }).returning({ id: integrationRuns.id });
+  const runId = Number(result[0].id);
   await db.insert(integrationRunAttempts).values({ integrationRunId: runId, attempt: 1, status: input.status, errorMessage: input.errorMessage, detail: { input: input.inputSummary, output: input.outputSummary }, completedAt: new Date() });
   await db.update(integrations).set({ lastSyncedAt: new Date(), healthMessage: input.status === "completed" ? "Latest normalized signal processed successfully." : input.errorMessage ?? "Adapter requires attention.", status: input.status === "completed" ? "connected" : "degraded" }).where(eq(integrations.id, input.integrationId));
   if (input.status === "failed") await openWorkflowAlert({ organizationId: input.organizationId, integrationId: input.integrationId, integrationRunId: runId, alertType: "source_failure", severity: "warning", title: "Provider run failed", detail: input.errorMessage ?? "The source adapter failed and is available for operator replay.", dedupeKey: `integration-${input.integrationId}-failed` });
@@ -555,8 +634,8 @@ export async function createSourceIngestionReceipt(input: { organizationId: numb
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
   const routingStatus = input.routingStatus ?? (input.tradeId ? "routed" : "pending");
-  const result = await db.insert(sourceIngestionReceipts).values({ ...input, routingStatus, routedAt: routingStatus === "routed" ? new Date() : undefined, routedBy: routingStatus === "routed" ? input.createdBy : undefined, normalizedStatus: input.normalizedStatus ?? "queued", normalizedAt: input.normalizedStatus === "normalized" ? new Date() : undefined });
-  return Number(result[0].insertId);
+  const result = await db.insert(sourceIngestionReceipts).values({ ...input, routingStatus, routedAt: routingStatus === "routed" ? new Date() : undefined, routedBy: routingStatus === "routed" ? input.createdBy : undefined, normalizedStatus: input.normalizedStatus ?? "queued", normalizedAt: input.normalizedStatus === "normalized" ? new Date() : undefined }).returning({ id: sourceIngestionReceipts.id });
+  return Number(result[0].id);
 }
 
 export async function getSourceIngestionReceiptById(id: number) {
@@ -568,8 +647,8 @@ export async function getSourceIngestionReceiptById(id: number) {
 export async function routeSourceIngestionReceipt(input: { receiptId: number; tradeId: number; routedBy: number; routingContext: unknown }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  const result = await db.update(sourceIngestionReceipts).set({ tradeId: input.tradeId, routingStatus: "routed", routingContext: input.routingContext, routedAt: new Date(), routedBy: input.routedBy }).where(and(eq(sourceIngestionReceipts.id, input.receiptId), eq(sourceIngestionReceipts.routingStatus, "pending")));
-  return Number(result[0].affectedRows ?? 0);
+  const result = await db.update(sourceIngestionReceipts).set({ tradeId: input.tradeId, routingStatus: "routed", routingContext: input.routingContext, routedAt: new Date(), routedBy: input.routedBy }).where(and(eq(sourceIngestionReceipts.id, input.receiptId), eq(sourceIngestionReceipts.routingStatus, "pending"))).returning({ id: sourceIngestionReceipts.id });
+  return result.length;
 }
 
 export async function getHistoricalShadowAuditReview(input: { organizationId: number; from: Date; to: Date }) {
@@ -592,8 +671,8 @@ export async function getHistoricalShadowAuditReview(input: { organizationId: nu
 export async function createConfirmedEvidenceField(input: { tradeId: number; fieldName: string; fieldValue: string; sourceLocation: unknown; confirmedBy: number }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  const result = await db.insert(evidenceFields).values({ tradeId: input.tradeId, fieldName: input.fieldName, fieldValue: input.fieldValue, authority: "authoritative", confidence: "1.0000", sourceLocation: input.sourceLocation, modelVersion: "structured-file-mapping", extractedAt: new Date(), confirmedBy: input.confirmedBy, confirmedAt: new Date() });
-  return Number(result[0].insertId);
+  const result = await db.insert(evidenceFields).values({ tradeId: input.tradeId, fieldName: input.fieldName, fieldValue: input.fieldValue, authority: "authoritative", confidence: "1.0000", sourceLocation: input.sourceLocation, modelVersion: "structured-file-mapping", extractedAt: new Date(), confirmedBy: input.confirmedBy, confirmedAt: new Date() }).returning({ id: evidenceFields.id });
+  return Number(result[0].id);
 }
 
 export async function replaySourceIngestionReceipt(id: number) {
@@ -617,19 +696,77 @@ export async function getWorkflowAlertPolicies(organizationId: number) {
 export async function upsertWorkflowAlertPolicy(input: { organizationId: number; alertType: "source_failure" | "source_health" | "obligation_sla"; enabled: boolean; severity: "critical" | "warning" | "information"; threshold: number; updatedBy: number }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  await db.insert(workflowAlertPolicies).values({ ...input, enabled: input.enabled ? 1 : 0 }).onDuplicateKeyUpdate({ set: { enabled: input.enabled ? 1 : 0, severity: input.severity, threshold: input.threshold, updatedBy: input.updatedBy, updatedAt: new Date() } });
+  await db.insert(workflowAlertPolicies).values({ ...input, enabled: input.enabled ? 1 : 0 }).onConflictDoUpdate({ target: [workflowAlertPolicies.organizationId, workflowAlertPolicies.alertType], set: { enabled: input.enabled ? 1 : 0, severity: input.severity, threshold: input.threshold, updatedBy: input.updatedBy, updatedAt: new Date() } });
 }
 
 export async function registerOperationalSchedule(input: { scheduleKey: string; taskUid: string; cronExpression: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  await db.insert(operationalSchedules).values({ ...input, enabled: 1 }).onDuplicateKeyUpdate({ set: { taskUid: input.taskUid, cronExpression: input.cronExpression, enabled: 1, updatedAt: new Date() } });
+  await db.insert(operationalSchedules).values({ ...input, enabled: 1 }).onConflictDoUpdate({ target: operationalSchedules.scheduleKey, set: { taskUid: input.taskUid, cronExpression: input.cronExpression, enabled: 1, updatedAt: new Date() } });
 }
 
 export async function getOperationalSchedule(scheduleKey: string) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
   return (await db.select().from(operationalSchedules).where(eq(operationalSchedules.scheduleKey, scheduleKey)).limit(1))[0] ?? null;
+}
+
+export async function configureWorkspaceSchedule(organizationId: number, cronExpression: string, enabled = true) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const next = nextUtcExecution(cronExpression, new Date());
+  if (!next) throw new Error("This schedule has no occurrence within eight years.");
+  const scheduleKey = `workspace-sweep-${organizationId}`;
+  const [schedule] = await db.insert(operationalSchedules).values({ scheduleKey, taskUid: `local-${randomUUID()}`, cronExpression, enabled: enabled ? 1 : 0 }).onConflictDoUpdate({ target: operationalSchedules.scheduleKey, set: { cronExpression, enabled: enabled ? 1 : 0, updatedAt: new Date() } }).returning();
+  return { taskUid: schedule.taskUid!, nextExecutionAt: enabled ? next.toISOString() : null };
+}
+
+export async function runWorkspaceOperationalSweep(organizationId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  return db.transaction(async tx => {
+    // Serialize manual and scheduled sweeps to prevent duplicate escalations.
+    await tx.select().from(organizations).where(eq(organizations.id, organizationId)).for("update");
+    const obligations = await runObligationEscalationSweep(organizationId, tx);
+    const sourceHealth = await runSourceHealthSweep(organizationId, tx);
+    return { obligations, sourceHealth };
+  });
+}
+
+export async function runDueOperationalSchedules(now = new Date()) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const schedules = await db.select({ id: operationalSchedules.id, updatedAt: operationalSchedules.updatedAt }).from(operationalSchedules).where(and(like(operationalSchedules.scheduleKey, "workspace-sweep-%"), eq(operationalSchedules.enabled, 1)));
+  let executed = 0;
+  let failed = 0;
+  for (const item of schedules) {
+    try {
+      const ran = await db.transaction(async tx => {
+        // PostgreSQL row locks also coordinate workers on separate app instances.
+        const [schedule] = await tx.select().from(operationalSchedules).where(and(eq(operationalSchedules.id, item.id), eq(operationalSchedules.enabled, 1))).for("update", { skipLocked: true });
+        if (!schedule) return false;
+        const baseline = new Date(Math.max(schedule.createdAt.getTime(), schedule.updatedAt.getTime(), schedule.lastExecutedAt?.getTime() ?? 0));
+        const due = nextUtcExecution(schedule.cronExpression, baseline);
+        if (!due || due > now) return false;
+        const organizationId = Number(schedule.scheduleKey.slice("workspace-sweep-".length));
+        if (!Number.isSafeInteger(organizationId) || organizationId < 1) throw new Error("Invalid workspace schedule");
+        const [organization] = await tx.select().from(organizations).where(eq(organizations.id, organizationId)).for("update");
+        if (!organization) throw new Error("Workspace no longer exists");
+        const obligations = await runObligationEscalationSweep(organizationId, tx);
+        const sourceHealth = await runSourceHealthSweep(organizationId, tx);
+        const result = { obligations, sourceHealth };
+        await tx.update(operationalSchedules).set({ lastExecutedAt: now, lastResult: result, lastError: null, updatedAt: now }).where(eq(operationalSchedules.id, schedule.id));
+        await tx.insert(auditRecords).values({ organizationId, action: "monitoring.scheduled_sweep", objectType: "operational_schedule", objectId: schedule.taskUid!, afterState: result, reason: "Scheduled workspace SLA and source-health sweep" });
+        return true;
+      });
+      if (ran) executed++;
+    } catch {
+      failed++;
+      // PostgreSQL stores microseconds; JS Date retains only milliseconds.
+      await db.update(operationalSchedules).set({ lastError: "Operational sweep failed; it will retry. Check database availability.", updatedAt: sql`${operationalSchedules.updatedAt}` }).where(and(eq(operationalSchedules.id, item.id), sql`date_trunc('milliseconds', ${operationalSchedules.updatedAt}) = ${item.updatedAt}::timestamptz`));
+    }
+  }
+  return { evaluated: schedules.length, executed, failed };
 }
 
 export async function getOperationalScheduleByTaskUid(taskUid: string) {
@@ -644,11 +781,11 @@ export async function recordOperationalScheduleExecution(input: { taskUid: strin
   await db.update(operationalSchedules).set({ lastExecutedAt: new Date(), lastResult: input.result, lastError: input.error ?? null }).where(eq(operationalSchedules.taskUid, input.taskUid));
 }
 
-export async function runObligationEscalationSweep() {
-  const db = await getDb();
+export async function runObligationEscalationSweep(organizationId?: number, writer?: EvidenceWriter) {
+  const db = writer ?? await getDb();
   if (!db) throw new Error("Database unavailable");
   const now = new Date();
-  const candidates = await db.select().from(tradeObligations).where(sql`${tradeObligations.deadline} is not null and ${tradeObligations.deadline} < ${now} and ${tradeObligations.status} != 'fulfilled'`);
+  const candidates = await db.select({ obligation: tradeObligations }).from(tradeObligations).innerJoin(trades, eq(trades.id, tradeObligations.tradeId)).where(and(organizationId ? eq(trades.organizationId, organizationId) : undefined, sql`${tradeObligations.deadline} is not null and ${tradeObligations.deadline} < ${now} and ${tradeObligations.status} != 'fulfilled'`)).then(rows => rows.map(row => row.obligation));
   if (!candidates.length) return { evaluated: 0, escalated: 0 };
   const ids = candidates.map(item => item.id);
   const history = await db.select().from(obligationEscalations).where(sql`${obligationEscalations.obligationId} in (${sql.join(ids.map(id => sql`${id}`), sql`, `)})`).orderBy(desc(obligationEscalations.escalatedAt));
@@ -657,28 +794,29 @@ export async function runObligationEscalationSweep() {
   for (const obligation of candidates) {
     const latest = history.find(record => record.obligationId === obligation.id);
     const trade = tradeById.get(obligation.tradeId); const policy = trade?.organizationId ? policies.find(item => item.organizationId === trade.organizationId && item.alertType === "obligation_sla") : undefined; const cadenceHours = policy?.threshold ?? 24;
+    if (policy?.enabled === 0) continue;
     if (latest && now.getTime() - latest.escalatedAt.getTime() < cadenceHours * 60 * 60 * 1000) continue;
     const level = history.filter(record => record.obligationId === obligation.id).length + 1;
     const reason = `SLA sweep: deadline ${obligation.deadline?.toISOString()} remains unmet.`;
     await db.insert(obligationEscalations).values({ obligationId: obligation.id, level, reason });
     await db.update(tradeObligations).set({ status: "overdue" }).where(eq(tradeObligations.id, obligation.id));
     await db.insert(tradeEvents).values({ tradeId: obligation.tradeId, eventType: "obligation.sla_escalated", title: "Obligation escalated by SLA sweep", detail: `${obligation.action}. ${reason}`, source: "scheduled_sla" });
-    if (trade?.organizationId) await openWorkflowAlert({ organizationId: trade.organizationId, alertType: "obligation_sla", severity: "warning", title: "Obligation SLA escalation", detail: `${obligation.action} remains overdue for trade ${trade.reference}.`, dedupeKey: `obligation-sla-${obligation.id}` });
+    if (trade?.organizationId) await openWorkflowAlert({ organizationId: trade.organizationId, alertType: "obligation_sla", severity: "warning", title: "Obligation SLA escalation", detail: `${obligation.action} remains overdue for trade ${trade.reference}.`, dedupeKey: `obligation-sla-${obligation.id}` }, db);
     escalated += 1;
   }
   return { evaluated: candidates.length, escalated };
 }
 
-export async function runSourceHealthSweep() {
-  const db = await getDb();
+export async function runSourceHealthSweep(organizationId?: number, writer?: EvidenceWriter) {
+  const db = writer ?? await getDb();
   if (!db) throw new Error("Database unavailable");
   const now = new Date();
-  const [allIntegrations, policies] = await Promise.all([db.select().from(integrations), db.select().from(workflowAlertPolicies)]);
+  const [allIntegrations, policies] = await Promise.all([db.select().from(integrations).where(organizationId ? eq(integrations.organizationId, organizationId) : undefined), db.select().from(workflowAlertPolicies).where(organizationId ? eq(workflowAlertPolicies.organizationId, organizationId) : undefined)]);
   const rows = allIntegrations.filter(integration => shouldEscalateSourceHealth({ policy: policies.find(item => item.organizationId === integration.organizationId && item.alertType === "source_health"), status: integration.status, lastSyncedAt: integration.lastSyncedAt, now }));
   let alerted = 0;
   for (const integration of rows) {
     const policy = policies.find(item => item.organizationId === integration.organizationId && item.alertType === "source_health"); const staleAt = new Date(now.getTime() - (policy?.threshold ?? 24) * 60 * 60 * 1000);
-    await openWorkflowAlert({ organizationId: integration.organizationId, integrationId: integration.id, alertType: "source_health", severity: integration.status === "degraded" ? "critical" : "warning", title: integration.status === "degraded" ? "Provider health is degraded" : "Provider health is stale", detail: integration.healthMessage || `No successful normalized signal has been recorded since ${staleAt.toISOString()}.`, dedupeKey: `source-health-${integration.id}` });
+    await openWorkflowAlert({ organizationId: integration.organizationId, integrationId: integration.id, alertType: "source_health", severity: integration.status === "degraded" ? "critical" : "warning", title: integration.status === "degraded" ? "Provider health is degraded" : "Provider health is stale", detail: integration.healthMessage || `No successful normalized signal has been recorded since ${staleAt.toISOString()}.`, dedupeKey: `source-health-${integration.id}` }, db);
     alerted += 1;
   }
   return { evaluated: rows.length, alerted };
@@ -687,14 +825,14 @@ export async function runSourceHealthSweep() {
 export async function recordExternalReference(input: { organizationId: number; tradeId?: number; entityType: string; providerName: string; externalId: string; payload: unknown; observedAt: Date }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  await db.insert(externalReferences).values(input).onDuplicateKeyUpdate({ set: { payload: input.payload, observedAt: input.observedAt, recordedAt: new Date() } });
+  await db.insert(externalReferences).values(input).onConflictDoUpdate({ target: [externalReferences.organizationId, externalReferences.providerName, externalReferences.entityType, externalReferences.externalId], set: { payload: input.payload, observedAt: input.observedAt, recordedAt: new Date() } });
 }
 
 export async function createImportMapping(input: { organizationId: number; sourceName: string; entityType: string; mapping: unknown; createdBy: number }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  const result = await db.insert(importMappings).values(input);
-  return Number(result[0].insertId);
+  const result = await db.insert(importMappings).values(input).returning({ id: importMappings.id });
+  return Number(result[0].id);
 }
 
 export async function appendAuditRecord(input: { organizationId: number; actorId?: number; action: string; objectType: string; objectId: string; beforeState?: unknown; afterState?: unknown; reason?: string; source?: string }) {
@@ -757,7 +895,7 @@ export async function removeOrganizationMembership(input: { membershipId: number
 export async function addCapabilityGrant(input: { membershipId: number; capability: string; grantedBy: number }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  await db.insert(capabilityGrants).values(input).onDuplicateKeyUpdate({ set: { grantedBy: input.grantedBy } });
+  await db.insert(capabilityGrants).values(input).onConflictDoUpdate({ target: [capabilityGrants.membershipId, capabilityGrants.capability], set: { grantedBy: input.grantedBy } });
 }
 
 export async function removeCapabilityGrant(input: { membershipId: number; capability: string }) {
@@ -792,8 +930,8 @@ export async function updateOrganizationControls(input: { organizationId: number
 export async function createGuestGrant(input: { organizationId: number; tradeId: number; recipientEmail: string; tokenHash: string; scope: unknown; expiresAt: Date; createdBy: number }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  const result = await db.insert(guestAccessGrants).values(input);
-  return Number(result[0].insertId);
+  const result = await db.insert(guestAccessGrants).values(input).returning({ id: guestAccessGrants.id });
+  return Number(result[0].id);
 }
 
 export async function getGuestGrantByTokenHash(tokenHash: string) {
@@ -905,25 +1043,59 @@ export async function updateDocumentUpload(input: {
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  const current = await getDocumentById(input.documentId);
-  if (current?.fileKey && current.fileUrl && current.fileName && current.mimeType) {
-    const versions = await db.select({ id: tradeDocumentVersions.id }).from(tradeDocumentVersions).where(eq(tradeDocumentVersions.documentId, input.documentId));
-    await db.insert(tradeDocumentVersions).values({
-      documentId: current.id, tradeId: current.tradeId, version: versions.length + 1, fileName: current.fileName, fileKey: current.fileKey,
-      fileUrl: current.fileUrl, mimeType: current.mimeType, extractedData: current.extractedData, inconsistencies: current.inconsistencies,
-      source: "user_upload", supersededBy: input.userId,
-    });
-  }
-  await db.update(tradeDocuments).set({
-    status: "uploaded", fileName: input.fileName, fileKey: input.fileKey, fileUrl: input.fileUrl, mimeType: input.mimeType,
-    extractedData: input.extractedData, inconsistencies: input.inconsistencies, uploadedBy: input.userId, uploadedAt: new Date(),
-  }).where(eq(tradeDocuments.id, input.documentId));
-  const snapshots = await db.select({ id: tradeDocumentVersions.id }).from(tradeDocumentVersions).where(eq(tradeDocumentVersions.documentId, input.documentId));
-  await db.insert(tradeDocumentVersions).values({
-    documentId: input.documentId, tradeId: current?.tradeId ?? 0, version: snapshots.length + 1, fileName: input.fileName,
-    fileKey: input.fileKey, fileUrl: input.fileUrl, mimeType: input.mimeType, extractedData: input.extractedData,
-    inconsistencies: input.inconsistencies, source: "user_upload", supersededBy: input.userId,
+  return db.transaction(async tx => {
+    const [reference] = await tx.select({ tradeId: tradeDocuments.tradeId }).from(tradeDocuments).where(eq(tradeDocuments.id, input.documentId));
+    if (!reference) throw new Error("Document not found");
+    await tx.select().from(trades).where(eq(trades.id, reference.tradeId)).for("update");
+    const [current] = await tx.select().from(tradeDocuments).where(eq(tradeDocuments.id, input.documentId)).for("update");
+    if (!current) throw new Error("Document not found");
+    const snapshots = await tx.select().from(tradeDocumentVersions).where(eq(tradeDocumentVersions.documentId, input.documentId));
+    let version = Math.max(0, ...snapshots.map(snapshot => snapshot.version));
+    // Preserve older records that predate immutable version snapshots.
+    if (current.fileKey && current.fileUrl && current.fileName && current.mimeType && !snapshots.some(snapshot => snapshot.fileKey === current.fileKey)) {
+      await tx.insert(tradeDocumentVersions).values({ documentId: current.id, tradeId: current.tradeId, version: ++version, fileName: current.fileName, fileKey: current.fileKey, fileUrl: current.fileUrl, mimeType: current.mimeType, extractedData: current.extractedData, inconsistencies: current.inconsistencies, source: "user_upload", supersededBy: input.userId });
+    }
+    const peers = await tx.select().from(tradeDocuments).where(eq(tradeDocuments.tradeId, current.tradeId));
+    const extracted = input.extractedData as ExtractedTradeFields;
+    input.inconsistencies = Array.from(new Set([...(Array.isArray(extracted.issues) ? extracted.issues : []), ...findCrossDocumentInconsistencies(extracted, peers.filter(peer => peer.id !== current.id && peer.fileKey && peer.extractedData).map(peer => peer.extractedData as ExtractedTradeFields))]));
+    const [updated] = await tx.update(tradeDocuments).set({ status: "uploaded", fileName: input.fileName, fileKey: input.fileKey, fileUrl: input.fileUrl, mimeType: input.mimeType, extractedData: input.extractedData, inconsistencies: input.inconsistencies, uploadedBy: input.userId, uploadedAt: new Date(), reviewedBy: null, reviewedAt: null, reviewerNotes: null }).where(eq(tradeDocuments.id, input.documentId)).returning();
+    const [snapshot] = await tx.insert(tradeDocumentVersions).values({ documentId: input.documentId, tradeId: current.tradeId, version: ++version, fileName: input.fileName, fileKey: input.fileKey, fileUrl: input.fileUrl, mimeType: input.mimeType, extractedData: input.extractedData, inconsistencies: input.inconsistencies, source: "user_upload", supersededBy: input.userId }).returning({ id: tradeDocumentVersions.id, version: tradeDocumentVersions.version, source: tradeDocumentVersions.source, createdAt: tradeDocumentVersions.createdAt, supersededBy: tradeDocumentVersions.supersededBy });
+    await syncDocumentEvidence(tx, updated, snapshot);
+    return reconcileDocumentState(tx, current.tradeId, input.userId, "document_upload", input.documentId);
   });
+}
+
+async function reconcileDocumentState(tx: EvidenceWriter, tradeId: number, actorId: number, reason: string, changedDocumentId: number) {
+  const [trade] = await tx.select().from(trades).where(eq(trades.id, tradeId));
+  const documents = await tx.select().from(tradeDocuments).where(eq(tradeDocuments.tradeId, tradeId));
+  const generated = await tx.select().from(tradeExceptions).where(and(eq(tradeExceptions.tradeId, tradeId), eq(tradeExceptions.title, "Cross-document inconsistency"), eq(tradeExceptions.category, "documentation"), eq(tradeExceptions.status, "open")));
+  for (const document of documents) {
+    const extracted = document.extractedData as ExtractedTradeFields | null;
+    const peers = documents.filter(peer => peer.id !== document.id && peer.fileKey && peer.extractedData).map(peer => peer.extractedData as ExtractedTradeFields);
+    const issues = document.fileKey && extracted ? Array.from(new Set([
+      ...(Array.isArray(extracted.issues) ? extracted.issues.filter((issue): issue is string => typeof issue === "string") : []),
+      ...findCrossDocumentInconsistencies(extracted, peers),
+    ])) : [];
+    document.inconsistencies = issues;
+    await tx.update(tradeDocuments).set({ inconsistencies: issues }).where(eq(tradeDocuments.id, document.id));
+    for (const exception of generated.filter(item => item.documentId === document.id && !issues.includes(item.detail))) {
+      await tx.update(tradeExceptions).set({ status: "resolved", resolutionOutcome: "corrected", resolutionRationale: `Re-evaluated after ${reason}; the retained source no longer raises this flag.`, resolvedBy: actorId, resolvedAt: new Date() }).where(eq(tradeExceptions.id, exception.id));
+    }
+    for (const detail of issues.filter(issue => !generated.some(exception => exception.documentId === document.id && exception.detail === issue))) {
+      await tx.insert(tradeExceptions).values({ tradeId, documentId: document.id, category: "documentation", severity: "warning", title: "Cross-document inconsistency", detail });
+    }
+  }
+  const trust = calculateTrustScore({ documents, partyKycState: trade.partyKycState });
+  // A previous assurance decision cannot silently approve changed source content.
+  if (trade.assuranceState === "approved") trade.assuranceState = "under_review";
+  await tx.update(trades).set({ trustScore: trust.score, trustBand: trust.band, assuranceState: trade.assuranceState, resolvedAt: trade.assuranceState === "under_review" ? null : trade.resolvedAt }).where(eq(trades.id, tradeId));
+  const exceptions = await tx.select().from(tradeExceptions).where(eq(tradeExceptions.tradeId, tradeId));
+  const obligations = await tx.select().from(tradeObligations).where(eq(tradeObligations.tradeId, tradeId));
+  const dependencies = obligations.length ? await tx.select().from(obligationDependencies).where(sql`${obligationDependencies.obligationId} in (${sql.join(obligations.map(obligation => sql`${obligation.id}`), sql`, `)})`) : [];
+  const preflight = evaluatePreflight({ trade, documents, exceptions, obligations, obligationDependencies: dependencies });
+  const fields = await tx.select().from(evidenceFields).where(and(eq(evidenceFields.tradeId, tradeId), isNull(evidenceFields.validTo)));
+  const [retainedRun] = await tx.insert(preflightRuns).values({ tradeId, gate: "full_release_preflight", status: preflight.summary === "ready" ? "ready" : preflight.summary === "warning" ? "ready_with_warnings" : "blocked", checks: preflight.checks, policySnapshot: { evaluator: "release-preflight-v1", trigger: reason }, evidenceSnapshot: { documentStates: documents.map(document => ({ id: document.id, type: document.documentType, status: document.status })), evidenceFieldIds: fields.map(field => field.id), openExceptionIds: exceptions.filter(exception => exception.status === "open").map(exception => exception.id) }, runBy: actorId }).returning({ id: preflightRuns.id });
+  return { trust, preflight, preflightRunId: retainedRun.id, inconsistencies: documents.find(document => document.id === changedDocumentId)?.inconsistencies as string[] ?? [] };
 }
 
 export async function updateDocumentReview(input: { documentId: number; reviewerId: number; status: "under review" | "verified" | "rejected"; reviewerNotes?: string }) {
@@ -935,7 +1107,28 @@ export async function updateDocumentReview(input: { documentId: number; reviewer
 export async function correctDocumentExtraction(input: { documentId: number; reviewerId: number; extractedData: Record<string, unknown>; reviewerNotes: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  await db.update(tradeDocuments).set({ extractedData: input.extractedData, reviewedBy: input.reviewerId, reviewedAt: new Date(), reviewerNotes: input.reviewerNotes }).where(eq(tradeDocuments.id, input.documentId));
+  return db.transaction(async tx => {
+    const [reference] = await tx.select({ tradeId: tradeDocuments.tradeId }).from(tradeDocuments).where(eq(tradeDocuments.id, input.documentId));
+    if (!reference) throw new Error("Document not found");
+    await tx.select().from(trades).where(eq(trades.id, reference.tradeId)).for("update");
+    const [current] = await tx.select().from(tradeDocuments).where(eq(tradeDocuments.id, input.documentId)).for("update");
+    if (!current?.fileKey || !current.fileName || !current.fileUrl || !current.mimeType) throw new Error("Upload a document before correcting its extraction.");
+    input.extractedData = { ...input.extractedData, ...((current.extractedData as Record<string, unknown> | null)?.extractionMeta ? { extractionMeta: (current.extractedData as Record<string, unknown>).extractionMeta } : {}) };
+    const snapshots = await tx.select().from(tradeDocumentVersions).where(eq(tradeDocumentVersions.documentId, current.id));
+    let version = Math.max(0, ...snapshots.map(snapshot => snapshot.version));
+    if (!snapshots.some(snapshot => snapshot.fileKey === current.fileKey)) await tx.insert(tradeDocumentVersions).values({ documentId: current.id, tradeId: current.tradeId, version: ++version, fileName: current.fileName, fileKey: current.fileKey, fileUrl: current.fileUrl, mimeType: current.mimeType, extractedData: current.extractedData, inconsistencies: current.inconsistencies, source: "user_upload" });
+    const [updated] = await tx.update(tradeDocuments).set({ extractedData: input.extractedData, status: "under review", reviewedBy: input.reviewerId, reviewedAt: new Date(), reviewerNotes: input.reviewerNotes }).where(eq(tradeDocuments.id, input.documentId)).returning();
+    const result = await reconcileDocumentState(tx, current.tradeId, input.reviewerId, "reviewer_correction", current.id);
+    const [snapshot] = await tx.insert(tradeDocumentVersions).values({ documentId: current.id, tradeId: current.tradeId, version: ++version, fileName: current.fileName, fileKey: current.fileKey, fileUrl: current.fileUrl, mimeType: current.mimeType, extractedData: input.extractedData, inconsistencies: result.inconsistencies, source: "reviewer_correction", supersededBy: input.reviewerId }).returning({ id: tradeDocumentVersions.id, version: tradeDocumentVersions.version, source: tradeDocumentVersions.source, createdAt: tradeDocumentVersions.createdAt, supersededBy: tradeDocumentVersions.supersededBy });
+    await syncDocumentEvidence(tx, updated, snapshot);
+    // Retain the final evidence IDs, including this correction, in the preflight snapshot.
+    const fields = await tx.select().from(evidenceFields).where(and(eq(evidenceFields.tradeId, current.tradeId), isNull(evidenceFields.validTo)));
+    const [latestRun] = await tx.select().from(preflightRuns).where(eq(preflightRuns.id, result.preflightRunId)).limit(1);
+    await tx.update(preflightRuns).set({ evidenceSnapshot: { ...(latestRun.evidenceSnapshot as Record<string, unknown>), evidenceFieldIds: fields.map(field => field.id) } }).where(eq(preflightRuns.id, latestRun.id));
+    await tx.insert(tradeEvents).values({ tradeId: current.tradeId, actorId: input.reviewerId, eventType: "document.extraction_corrected", title: `${current.documentType} extraction corrected`, detail: input.reviewerNotes, source: "reviewer_correction", beforeState: { extractedData: current.extractedData, status: current.status }, afterState: { extractedData: input.extractedData, status: "under review", documentVersion: version, preflight: result.preflight.summary } });
+    if (current.tradeId) await tx.insert(auditRecords).values({ organizationId: (await tx.select().from(trades).where(eq(trades.id, current.tradeId)))[0].organizationId!, actorId: input.reviewerId, action: "document.extraction_corrected", objectType: "document", objectId: String(current.id), beforeState: current.extractedData, afterState: input.extractedData, reason: input.reviewerNotes });
+    return result;
+  });
 }
 
 export async function updateTradeAssurance(input: { tradeId: number; assuranceState: "submitted" | "under_review" | "approved" | "rejected"; actorId: number; reason?: string }) {
@@ -1014,8 +1207,8 @@ export async function getObligationById(obligationId: number) {
 export async function createPartnerRequest(input: { tradeId: number; requestedBy: number; recipientEmail: string; requestType: string; message: string; scope?: unknown; dueAt?: Date }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  const result = await db.insert(partnerRequests).values({ ...input, status: "sent" });
-  return Number(result[0].insertId);
+  const result = await db.insert(partnerRequests).values({ ...input, status: "sent" }).returning({ id: partnerRequests.id });
+  return Number(result[0].id);
 }
 
 export async function listPartnerRequestsForUser(user: { id: number; role: "trader" | "reviewer"; organizationId: number }) {
@@ -1075,8 +1268,8 @@ export async function createShadowAuditTrade(ownerId: number) {
     ownerId, organizationId: owner?.organizationId ?? null, reference, buyerName: "Northstar Foods GmbH", buyerCountry: "DE", sellerName: "Meridian Export House LLC", sellerCountry: "AE",
     commodity: "Grade 1 Arabica coffee beans", quantity: "24000.000", unit: "kg", unitPrice: "4.250", totalValue: "102000.00", currency: "USD", incoterm: "FOB",
     originCountry: "BR", destinationCountry: "DE", expectedShipmentDate: shipmentDate, commercialState: "confirmed", executionState: "blocked", documentState: "in_progress", logisticsState: "planned", settlementState: "unconfirmed", assuranceState: "submitted", partyKycState: "pending", trustScore: 45, trustBand: "guarded", submittedAt: now,
-  });
-  const tradeId = Number(result[0].insertId);
+  }).returning({ id: trades.id });
+  const tradeId = Number(result[0].id);
   await db.insert(tradeDocuments).values([
     { tradeId, documentType: "commercial invoice", status: "uploaded", fileName: "INV-MEH-3481-v2.pdf", mimeType: "application/pdf", uploadedBy: ownerId, uploadedAt: now, extractedData: { invoiceNumber: "MEH-3481", issueDate: "2026-08-20", currency: "USD", totalAmount: "102000.00", sellerName: "Meridian Export House LLC", buyerName: "Northstar Foods GmbH", quantity: "24000", unit: "kg", incoterm: "CIF", originCountry: "BR", destinationCountry: "DE", transportReference: "", confidence: 0.96, issues: ["Incoterm differs from Trade Twin."] }, inconsistencies: ["incoterm conflicts with another uploaded document."] },
     { tradeId, documentType: "packing list", status: "uploaded", fileName: "PL-MEH-3481-final.pdf", mimeType: "application/pdf", uploadedBy: ownerId, uploadedAt: now, extractedData: { invoiceNumber: "MEH-3481", issueDate: "2026-08-20", currency: "USD", totalAmount: "", sellerName: "Meridian Export House LLC", buyerName: "Northstar Foods GmbH", quantity: "23800", unit: "kg", incoterm: "FOB", originCountry: "BR", destinationCountry: "DE", transportReference: "", confidence: 0.93, issues: ["Quantity differs from commercial invoice."] }, inconsistencies: ["quantity conflicts with another uploaded document."] },
@@ -1108,8 +1301,8 @@ export async function createShadowAuditTrade(ownerId: number) {
 export async function createTradeTask(input: { organizationId: number; tradeId: number; exceptionId?: number; obligationId?: number; title: string; detail: string; assigneeId?: number; deadline?: Date; createdBy: number }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  const result = await db.insert(tradeTasks).values(input);
-  return Number(result[0].insertId);
+  const result = await db.insert(tradeTasks).values(input).returning({ id: tradeTasks.id });
+  return Number(result[0].id);
 }
 
 export async function getTradeTaskById(id: number) {
@@ -1128,6 +1321,6 @@ export async function updateTradeTaskStatus(input: { id: number; status: "open" 
 export async function createGeneratedDocument(input: { tradeId: number; documentType: string; templateVersion: string; dataSnapshot: unknown; renderedContent: string; contentHash: string; issuedBy?: number; status: "draft" | "issued" }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  const result = await db.insert(generatedDocuments).values({ ...input, issuedAt: input.status === "issued" ? new Date() : null });
-  return Number(result[0].insertId);
+  const result = await db.insert(generatedDocuments).values({ ...input, issuedAt: input.status === "issued" ? new Date() : null }).returning({ id: generatedDocuments.id });
+  return Number(result[0].id);
 }
