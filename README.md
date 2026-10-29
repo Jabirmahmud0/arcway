@@ -925,6 +925,8 @@ The Reviewer **Evaluation** page includes a live Gemini/Groq document benchmark 
 
 [Node.js deployment and backup guide](docs/DEPLOYMENT.md) covers production configuration, health endpoints, native PostgreSQL backups, checksum verification, restore drills, CI, and optional Linux service templates. Docker is not required. Public hosting, production Clerk configuration, DNS, and off-machine backup storage remain deployment-environment choices.
 
+For Vercel, use the included `vercel.json` and [Vercel deployment guide](docs/VERCEL.md). Only `dist/public` is published as static content; API routes execute a serverless function. Private runtime state is retained in Neon, and the included demo mode supports the existing Clerk test instance while keeping authentication and workspace checks enabled.
+
 For deployment, mount persistent disk at `STORAGE_LOCAL_DIR` and `INTEGRATION_TOKEN_DIR`, and back up both alongside Neon. Ephemeral hosting loses files on redeployment. Multiple instances require a shared private volume and routing affinity for Gmail OAuth state. A cloud object-storage backend is not included in this local implementation. Older Forge-backed files still require their original Forge credentials.
 
 ### Gmail connection

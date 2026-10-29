@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import { ENV } from "./_core/env";
+import { databaseRuntimeEnabled, putRuntimeState, readRuntimeState, removeRuntimeState } from "./runtimeState";
 
 // Private disk storage; never mounted as a public static directory.
 export function storagePath(key: string) {
@@ -15,6 +16,11 @@ export async function storagePut(relKey: string, data: Buffer | Uint8Array | str
   const extension = path.extname(relKey).replace(/[^a-zA-Z0-9.]/g, "").slice(0, 12);
   const key = `${relKey.split("/").slice(0, -1).join("/")}/${randomUUID()}${extension}`;
   const file = storagePath(key);
+  if (databaseRuntimeEnabled()) {
+    const bytes = Buffer.from(data);
+    await putRuntimeState("private-file", key, { base64: bytes.toString("base64"), contentType, size: bytes.length });
+    return { key, url: `/api/storage/${key}` };
+  }
   await mkdir(path.dirname(file), { recursive: true });
   await writeFile(file, data, { flag: "wx", mode: 0o600 });
   try { await writeFile(file + ".metadata.json", JSON.stringify({ contentType }), { flag: "wx", mode: 0o600 }); }
@@ -23,11 +29,17 @@ export async function storagePut(relKey: string, data: Buffer | Uint8Array | str
 }
 export async function storageRead(key: string) {
   const file = storagePath(key);
+  if (databaseRuntimeEnabled()) {
+    const value = await readRuntimeState<{ base64: string; contentType: string }>("private-file", key);
+    if (!value) throw Object.assign(new Error("File not found"), { code: "ENOENT" });
+    return { buffer: Buffer.from(value.base64, "base64"), contentType: value.contentType };
+  }
   const [buffer, metadata] = await Promise.all([readFile(file), readFile(file + ".metadata.json", "utf8")]);
   return { buffer, contentType: String(JSON.parse(metadata).contentType) };
 }
 export async function storageDelete(key: string) {
   const file = storagePath(key);
+  if (databaseRuntimeEnabled()) return removeRuntimeState("private-file", key);
   await Promise.all([file, file + ".metadata.json"].map(name => unlink(name).catch(error => { if (error.code !== "ENOENT") throw error; })));
 }
 export async function storageGet(key: string) {

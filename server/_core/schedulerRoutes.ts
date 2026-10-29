@@ -9,8 +9,9 @@ export function isSchedulerAuthorized(authorization: string | undefined, secret:
 }
 
 export function registerSchedulerRoutes(app: Express, run: () => Promise<unknown>) {
-  app.post("/api/scheduled/operationalSweep", async (req, res) => {
-    const secret = process.env.SCHEDULER_SECRET ?? "";
+  app.all("/api/scheduled/operationalSweep", async (req, res) => {
+    if (!["POST", "GET"].includes(req.method)) return res.status(405).end();
+    const secret = process.env.CRON_SECRET || process.env.SCHEDULER_SECRET || "";
     if (secret.length < 32) return res.status(503).json({ error: "External scheduler access is not configured." });
     if (!isSchedulerAuthorized(req.headers.authorization, secret)) return res.status(401).json({ error: "Invalid scheduler credentials." });
     try {

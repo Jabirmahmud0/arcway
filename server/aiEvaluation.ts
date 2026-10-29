@@ -5,6 +5,7 @@ import { DOCUMENT_FIELD_NAMES } from "./documentEvidence";
 import { extractDocumentFields } from "./services/documentIntelligence";
 import type { AIProvider } from "./_core/aiProviders";
 import type { ExtractedTradeFields, RequiredDocumentType } from "./tradeDomain";
+import { databaseRuntimeEnabled, putRuntimeState, readRuntimeState } from "./runtimeState";
 
 type Field = typeof DOCUMENT_FIELD_NAMES[number];
 type GoldenCase = { id: string; documentType: RequiredDocumentType; text: string; expected: Partial<Record<Field, string>> };
@@ -61,6 +62,11 @@ function reportDirectory(organizationId: number) {
 }
 export async function saveAiEvaluation(organizationId: number, report: AiEvaluationReport) {
   const root = reportDirectory(organizationId);
+  if (databaseRuntimeEnabled()) {
+    await putRuntimeState("ai-report", `${organizationId}:${report.id}`, report);
+    await putRuntimeState("ai-latest", String(organizationId), report);
+    return;
+  }
   await mkdir(root, { recursive: true, mode: 0o700 });
   const serialized = JSON.stringify(report, null, 2);
   await writeFile(path.join(root, `${report.id}.json`), serialized, { flag: "wx", mode: 0o600 });
@@ -69,6 +75,8 @@ export async function saveAiEvaluation(organizationId: number, report: AiEvaluat
   await rename(temporary, path.join(root, "latest.json"));
 }
 export async function latestAiEvaluation(organizationId: number): Promise<AiEvaluationReport | null> {
+  reportDirectory(organizationId);
+  if (databaseRuntimeEnabled()) return readRuntimeState<AiEvaluationReport>("ai-latest", String(organizationId));
   try { return JSON.parse(await readFile(path.join(reportDirectory(organizationId), "latest.json"), "utf8")); }
   catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw error; }
 }

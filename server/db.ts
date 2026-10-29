@@ -101,7 +101,7 @@ export async function getDb() {
       if (!/^postgres(?:ql)?:\/\//.test(connectionString)) {
         throw new Error("DATABASE_URL must be a PostgreSQL connection string (Neon).");
       }
-      const pool = new Pool({ connectionString, max: 10, idleTimeoutMillis: 30_000, connectionTimeoutMillis: 15_000 });
+      const pool = new Pool({ connectionString, max: process.env.VERCEL === "1" ? 2 : 10, idleTimeoutMillis: 30_000, connectionTimeoutMillis: 15_000 });
       pool.on("error", () => console.error("[Database] An idle PostgreSQL connection failed."));
       _db = drizzle(pool);
     } catch (error) {

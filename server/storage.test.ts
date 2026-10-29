@@ -10,6 +10,10 @@ let root: string;
 beforeEach(async () => { await mkdir(".data/tests", { recursive: true }); root = await mkdtemp(path.resolve(".data/tests/arcway-files-")); vi.stubEnv("STORAGE_LOCAL_DIR", path.join(root, "uploads")); vi.stubEnv("INTEGRATION_TOKEN_DIR", path.join(root, "tokens")); vi.stubEnv("INTEGRATION_ENCRYPTION_KEY", "a".repeat(64)); });
 afterEach(async () => { vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true }); });
 describe("private document storage", () => {
+  it("enforces the smaller Vercel request-safe upload limit", () => {
+    vi.stubEnv("VERCEL", "1");
+    expect(() => decodeUpload(Buffer.alloc(3_000_001, 65).toString("base64"), "text/plain")).toThrow("3 MB");
+  });
   it("retains exact bytes using immutable unique keys", async () => {
     const first = await storagePut("trades/1/invoice/invoice.txt", "invoice one", "text/plain");
     const second = await storagePut("trades/1/invoice/invoice.txt", "invoice two", "text/plain");

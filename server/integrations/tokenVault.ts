@@ -1,6 +1,7 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { mkdir, readFile, rename, writeFile, unlink } from "node:fs/promises";
 import path from "node:path";
+import { databaseRuntimeEnabled, putRuntimeState, readRuntimeState, removeRuntimeState } from "../runtimeState";
 
 function encryptionKey() {
   const key = Buffer.from(process.env.INTEGRATION_ENCRYPTION_KEY || "", "hex");
@@ -23,16 +24,21 @@ export function unseal<T>(value: ReturnType<typeof seal>): T {
   return JSON.parse(Buffer.concat([decipher.update(Buffer.from(value.data, "hex")), decipher.final()]).toString("utf8"));
 }
 export async function readGmailToken<T>(userId: number): Promise<T | null> {
+  tokenPath(userId);
+  if (databaseRuntimeEnabled()) { const stored = await readRuntimeState<ReturnType<typeof seal>>("gmail-token", String(userId)); return stored ? unseal<T>(stored) : null; }
   try { return unseal<T>(JSON.parse(await readFile(tokenPath(userId), "utf8"))); }
   catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw error; }
 }
 export async function writeGmailToken(userId: number, token: unknown) {
   const file = tokenPath(userId);
+  if (databaseRuntimeEnabled()) return putRuntimeState("gmail-token", String(userId), seal(token));
   await mkdir(path.dirname(file), { recursive: true });
   const temp = file + `.${randomBytes(8).toString("hex")}.tmp`;
   await writeFile(temp, JSON.stringify(seal(token)), { flag: "wx", mode: 0o600 });
   await rename(temp, file);
 }
 export async function removeGmailToken(userId: number) {
+  tokenPath(userId);
+  if (databaseRuntimeEnabled()) return removeRuntimeState("gmail-token", String(userId));
   await unlink(tokenPath(userId)).catch(error => { if (error.code !== "ENOENT") throw error; });
 }

@@ -71,6 +71,7 @@ import {
 import { extractionValidator } from "../services/documentIntelligence";
 import { getDocumentProviders, getAIProviderConfig } from "../_core/aiProviders";
 import { latestAiEvaluation, runAiEvaluation, saveAiEvaluation } from "../aiEvaluation";
+import { databaseRuntimeEnabled, acquireRuntimeLease, releaseRuntimeLease } from "../runtimeState";
 import { buildChangeImpact } from "../changeImpact";
 import { evaluateLcPreflight } from "../lcPreflight";
 import { requireArcwayRole } from "../access";
@@ -344,7 +345,7 @@ export const operationsRouter = router({
       const trade = input.tradeId ? await assertWorkspaceTrade(input.tradeId, ctx.user) : undefined;
       if (input.base64 && (!input.fileName || !input.mimeType)) throw new TRPCError({ code: "BAD_REQUEST", message: "A file name and MIME type are required for attachment intake." });
       const buffer = input.base64 ? decodeUpload(input.base64, input.mimeType!) : undefined;
-      if (buffer && (!buffer.length || buffer.length > 10_000_000)) throw new TRPCError({ code: "BAD_REQUEST", message: "Source files must be between 1 byte and 10 MB." });
+      if (buffer && (!buffer.length || buffer.length > (process.env.VERCEL === "1" ? 3_000_000 : 10_000_000))) throw new TRPCError({ code: "BAD_REQUEST", message: `Source files must be between 1 byte and ${process.env.VERCEL === "1" ? 3 : 10} MB.` });
       const payloadHash = createHash("sha256").update(input.base64 ?? JSON.stringify(input.payload ?? {})).digest("hex");
       const stored = buffer && input.fileName && input.mimeType ? await storagePut(`ingestion/${workspaceId(ctx.user)}/${trade?.id ?? "unlinked"}/${Date.now()}-${input.fileName.replace(/[^a-zA-Z0-9._-]/g, "_")}`, buffer, input.mimeType) : undefined;
       let normalizedPayload = input.payload ?? { fileName: input.fileName, byteLength: buffer?.length ?? 0 };
@@ -505,14 +506,17 @@ export const operationsRouter = router({
       const organizationId = workspaceId(ctx.user);
       if (!getDocumentProviders(false).includes(input.provider)) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Configure this provider's API key first." });
       if (activeEvaluations.has(organizationId) || Date.now() - (evaluationLastStarted.get(organizationId) ?? 0) < 60_000) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "An evaluation is running or just started. Wait a minute before trying again." });
+      const lease = databaseRuntimeEnabled() ? await acquireRuntimeLease("ai-evaluation", String(organizationId)) : null;
+      if (databaseRuntimeEnabled() && !lease) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "An evaluation is already running in this workspace." });
       activeEvaluations.add(organizationId);
       evaluationLastStarted.set(organizationId, Date.now());
       try {
+        if (lease && !await acquireRuntimeLease("ai-evaluation-cooldown", String(organizationId), 60_000)) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Wait a minute between benchmark runs." });
         const report = await runAiEvaluation(input.provider);
         await saveAiEvaluation(organizationId, report);
         await appendAuditRecord({ organizationId, actorId: ctx.user.id, action: "ai.evaluated", objectType: "ai_evaluation", objectId: report.id, afterState: { provider: input.provider, suite: report.suite, completedCases: report.completedCases, f1: report.f1 }, reason: "Reviewer ran the synthetic document extraction benchmark" });
         return report;
-      } finally { activeEvaluations.delete(organizationId); }
+      } finally { activeEvaluations.delete(organizationId); if (lease) await releaseRuntimeLease("ai-evaluation", String(organizationId), lease); }
     }),
     deterministicEvaluation: protectedProcedure.query(async ({ ctx }) => {
       requireArcwayRole("reviewer", ctx.user.role);

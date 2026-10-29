@@ -39,6 +39,7 @@ function WorkspaceSession({
       links: [
         httpBatchLink({
           url: "/api/trpc",
+          maxItems: 1,
           transformer: superjson,
           async headers() {
             if (getToken) {

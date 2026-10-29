@@ -14,6 +14,7 @@ describe("health and external scheduler HTTP boundaries", () => {
     const address = server.address() as import("node:net").AddressInfo;
     const url = `http://127.0.0.1:${address.port}`;
     vi.stubEnv("SCHEDULER_SECRET", "x".repeat(40));
+    vi.stubEnv("CRON_SECRET", "");
     try {
       expect((await fetch(`${url}/api/health/live`)).status).toBe(200);
       expect((await fetch(`${url}/api/health`)).status).toBe(200);
@@ -22,6 +23,7 @@ describe("health and external scheduler HTTP boundaries", () => {
       expect(sweep).not.toHaveBeenCalled();
       expect((await fetch(`${url}/api/scheduled/operationalSweep`, { method: "POST", headers: { Authorization: `Bearer ${"x".repeat(40)}` } })).status).toBe(200);
       expect(sweep).toHaveBeenCalledOnce();
+      expect((await fetch(`${url}/api/scheduled/operationalSweep`, { headers: { Authorization: `Bearer ${"x".repeat(40)}` } })).status).toBe(200);
       sweep.mockResolvedValue({ executed: 0, failed: 1 });
       expect((await fetch(`${url}/api/scheduled/operationalSweep`, { method: "POST", headers: { Authorization: `Bearer ${"x".repeat(40)}` } })).status).toBe(503);
       ready.mockRejectedValue(new Error("private database details"));

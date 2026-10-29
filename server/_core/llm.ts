@@ -299,8 +299,9 @@ const fetchWithBackoff = async (
   init: FetchInit
 ): Promise<Response> => {
   let lastError: unknown;
+  const retries = process.env.VERCEL === "1" ? 0 : RETRY_MAX_RETRIES;
 
-  for (let attempt = 0; attempt <= RETRY_MAX_RETRIES; attempt++) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const response = await fetch(url, {
         ...init,
@@ -309,7 +310,7 @@ const fetchWithBackoff = async (
       if (
         response.ok ||
         ![408, 409, 429, 500, 502, 503, 504].includes(response.status) ||
-        attempt === RETRY_MAX_RETRIES
+        attempt === retries
       ) {
         return response;
       }
@@ -326,7 +327,7 @@ const fetchWithBackoff = async (
       await sleep(computeBackoffDelay(attempt, retryAfterMs));
     } catch (error) {
       lastError = error;
-      if (attempt === RETRY_MAX_RETRIES) throw error;
+      if (attempt === retries) throw error;
       console.warn(
         `LLM request retry ${attempt + 1}/${RETRY_MAX_RETRIES} after network error`
       );

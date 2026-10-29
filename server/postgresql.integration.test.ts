@@ -53,7 +53,7 @@ beforeAll(async () => {
 }, 60_000);
 beforeEach(async () => {
   await engine.client!.exec(
-    'TRUNCATE "users", "organizations", "operationalSchedules" RESTART IDENTITY CASCADE'
+    'TRUNCATE "users", "organizations", "operationalSchedules", "appRuntimeState" RESTART IDENTITY CASCADE'
   );
 });
 afterAll(async () => {
@@ -92,12 +92,12 @@ async function trade(owner: Awaited<ReturnType<typeof account>>) {
 }
 
 describe("Neon PostgreSQL migration and persistence", () => {
-  it("applies all 47 tables and can rerun the migration safely", async () => {
+  it("applies all 48 tables and can rerun the migration safely", async () => {
     await migrate(drizzle(engine.client!), { migrationsFolder });
     const tables = await engine.client!.query(
       "select table_name from information_schema.tables where table_schema = 'public'"
     );
-    expect(tables.rows).toHaveLength(47);
+    expect(tables.rows).toHaveLength(48);
     const columns = await engine.client!.query<{
       column_name: string;
       data_type: string;
@@ -531,4 +531,36 @@ it("rolls back a failed scheduled sweep, retains its error with PostgreSQL times
   expect(await database.runDueOperationalSchedules(new Date("2026-10-01T00:00:10Z"))).toMatchObject({ executed: 1, failed: 0 });
   expect((await database.getTradeWorkspace(id))!.obligationEscalations).toHaveLength(1);
   expect((await database.getOperationalSchedule(`workspace-sweep-${owner.organizationId}`))?.lastError).toBeNull();
+});
+
+it("retains Vercel file bytes and encrypted tokens across runtime reloads with one-time OAuth state", async () => {
+  vi.stubEnv("RUNTIME_STATE_BACKEND", "postgres");
+  vi.stubEnv("INTEGRATION_ENCRYPTION_KEY", "a".repeat(64));
+  try {
+    const runtime = await import("./runtimeState");
+    const storage = await import("./storage");
+    const vault = await import("./integrations/tokenVault");
+    const bytes = Buffer.from("synthetic private invoice");
+    const file = await storage.storagePut("trades/1/test.txt", bytes, "text/plain");
+    expect((await storage.storageRead(file.key)).buffer).toEqual(bytes);
+    await vault.writeGmailToken(1, { refreshToken: "synthetic-refresh-token", organizationId: 1 });
+    const encrypted = await runtime.readRuntimeState<any>("gmail-token", "1");
+    expect(JSON.stringify(encrypted)).not.toContain("synthetic-refresh-token");
+    expect(await vault.readGmailToken(1)).toEqual({ refreshToken: "synthetic-refresh-token", organizationId: 1 });
+    expect(await vault.readGmailToken(2)).toBeNull();
+    await runtime.putRuntimeState("gmail-oauth", "user1-state", { userId: 1 }, new Date(Date.now() + 60_000));
+    const consumed = await Promise.all([runtime.consumeRuntimeState("gmail-oauth", "user1-state"), runtime.consumeRuntimeState("gmail-oauth", "user1-state")]);
+    expect(consumed.filter(Boolean)).toHaveLength(1);
+    await runtime.putRuntimeState("gmail-oauth", "expired", {}, new Date(Date.now() - 1000));
+    expect(await runtime.consumeRuntimeState("gmail-oauth", "expired")).toBeNull();
+    const lease = await runtime.acquireRuntimeLease("gmail-sync", "1");
+    expect(lease).toBeTruthy(); expect(await runtime.acquireRuntimeLease("gmail-sync", "1")).toBeNull();
+    await runtime.releaseRuntimeLease("gmail-sync", "1", "wrong-token");
+    expect(await runtime.acquireRuntimeLease("gmail-sync", "1")).toBeNull();
+    await runtime.releaseRuntimeLease("gmail-sync", "1", lease!);
+    expect(await runtime.acquireRuntimeLease("gmail-sync", "1")).toBeTruthy();
+    await storage.storageDelete(file.key);
+    await expect(storage.storageRead(file.key)).rejects.toMatchObject({ code: "ENOENT" });
+    await vault.removeGmailToken(1); expect(await vault.readGmailToken(1)).toBeNull();
+  } finally { vi.stubEnv("RUNTIME_STATE_BACKEND", ""); }
 });

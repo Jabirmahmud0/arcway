@@ -154,6 +154,7 @@ const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(
 
 export default defineConfig({
   plugins,
+  define: { "import.meta.env.VITE_MAX_UPLOAD_BYTES": JSON.stringify(process.env.VERCEL === "1" ? "3000000" : "10000000"), "import.meta.env.VITE_RUNTIME_PLATFORM": JSON.stringify(process.env.VERCEL === "1" ? "vercel" : "node") },
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "client", "src"),

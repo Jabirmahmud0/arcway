@@ -5,6 +5,7 @@ import { sdk } from "../_core/sdk";
 import { appendTradeEvent, getTradeById, saveGmailReceipt } from "../db";
 import { storageDelete, storagePut } from "../storage";
 import { readGmailToken, removeGmailToken, writeGmailToken } from "./tokenVault";
+import { acquireRuntimeLease, releaseRuntimeLease, readRuntimeState, putRuntimeState, consumeRuntimeState, databaseRuntimeEnabled } from "../runtimeState";
 
 type User = { id: number; organizationId?: number | null; role: "trader" | "reviewer" };
 type Token = { refreshToken: string; organizationId: number; email: string; scope: string };
@@ -22,14 +23,18 @@ function requireConfig() { if (!gmailConfigured()) throw new TRPCError({ code: "
 export async function gmailStatus(user: User) {
   const token = await readGmailToken<Token>(user.id);
   const connected = Boolean(token && token.organizationId === user.organizationId);
-  return { configured: gmailConfigured(), connected, email: connected ? token!.email : null, syncing: syncing.has(user.id) };
+  return { configured: gmailConfigured(), connected, email: connected ? token!.email : null, syncing: databaseRuntimeEnabled() ? Boolean(await readRuntimeState("gmail-sync", String(user.id))) : syncing.has(user.id) };
 }
-export function beginGmail(user: User) {
+export async function beginGmail(user: User) {
   requireConfig();
   if (!user.organizationId) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Workspace unavailable." });
   for (const [key, value] of Array.from(states)) if (value.expires < Date.now() || value.userId === user.id) states.delete(key);
   const state = randomBytes(32).toString("hex");
   states.set(state, { userId: user.id, organizationId: user.organizationId, expires: Date.now() + 600000 });
+  if (databaseRuntimeEnabled()) {
+    states.delete(state);
+    await putRuntimeState("gmail-oauth", `${user.id}:${createHash("sha256").update(state).digest("hex")}`, { userId: user.id, organizationId: user.organizationId }, new Date(Date.now() + 600000));
+  }
   const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   url.search = new URLSearchParams({ client_id: process.env.GMAIL_CLIENT_ID!, redirect_uri: process.env.GMAIL_REDIRECT_URI!, response_type: "code", scope, access_type: "offline", prompt: "consent", state }).toString();
   return { url: url.toString() };
@@ -44,7 +49,14 @@ async function gmailGet<T>(url: string, accessToken: string): Promise<T> {
   if (!response.ok) throw new Error(response.status === 401 || response.status === 403 ? "Gmail access was denied. Check Gmail API access and reconnect." : "Gmail is temporarily unavailable. Try syncing again.");
   return response.json() as Promise<T>;
 }
-export function consumeGmailState(state: string, user: User) {
+export async function consumeGmailState(state: string, user: User) {
+  if (databaseRuntimeEnabled()) {
+    const key = `${user.id}:${createHash("sha256").update(state).digest("hex")}`;
+    const pending = await readRuntimeState<{ userId: number; organizationId: number }>("gmail-oauth", key);
+    if (!pending || pending.userId !== user.id || pending.organizationId !== user.organizationId) throw new Error("Invalid or expired Gmail connection. Start again from Integrations.");
+    if (!await consumeRuntimeState("gmail-oauth", key)) throw new Error("This connection attempt was already used.");
+    return;
+  }
   const pending = states.get(state);
   if (!pending || pending.userId !== user.id || pending.organizationId !== user.organizationId || pending.expires < Date.now()) throw new Error("Invalid or expired Gmail connection. Start again from Integrations.");
   states.delete(state);
@@ -56,7 +68,7 @@ export function registerGmailRoutes(app: Express) {
     try { user = await sdk.authenticateRequest(req); } catch { res.status(401).send("Sign in to ARCWAY and start the Gmail connection again."); return; }
     try {
       requireConfig();
-      consumeGmailState(typeof req.query.state === "string" ? req.query.state : "", user);
+      await consumeGmailState(typeof req.query.state === "string" ? req.query.state : "", user);
       if (req.query.error) { res.redirect("/integrations?gmail=cancelled"); return; }
       if (typeof req.query.code !== "string") throw new Error("Missing authorization code");
       const token = await tokenRequest({ code: req.query.code, redirect_uri: process.env.GMAIL_REDIRECT_URI!, grant_type: "authorization_code" });
@@ -80,7 +92,10 @@ export async function syncGmail(user: User, input: { tradeId: number; query: str
   const token = await readGmailToken<Token>(user.id);
   if (!token || token.organizationId !== user.organizationId) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Connect your Gmail account first." });
   if (syncing.has(user.id)) throw new TRPCError({ code: "CONFLICT", message: "A Gmail sync is already in progress." });
+  const lease = databaseRuntimeEnabled() ? await acquireRuntimeLease("gmail-sync", String(user.id)) : null;
+  if (databaseRuntimeEnabled() && !lease) throw new TRPCError({ code: "CONFLICT", message: "A Gmail sync is already in progress." });
   syncing.add(user.id);
+  const maxAttachmentBytes = process.env.VERCEL === "1" ? 3_000_000 : 10_000_000;
   let imported = 0, duplicates = 0, skippedAttachments = 0, attachmentBytes = 0, attachmentCount = 0;
   try {
     const fresh = await tokenRequest({ refresh_token: token.refreshToken, grant_type: "refresh_token" });
@@ -104,10 +119,10 @@ export async function syncGmail(user: User, input: { tradeId: number; query: str
       await retain("message", `${header("subject").slice(0, 240) || "Gmail message"}.txt`, context, messageFile, "text/plain");
       const parts = flattenParts(message.payload).filter(part => part.filename);
       for (const [index, part] of Array.from(parts.entries())) {
-        if (!allowedAttachments.has(part.mimeType || "") || !part.body || (part.body.size || 0) > 10000000 || attachmentCount >= 20 || attachmentBytes + (part.body.size || 0) > 30000000) { skippedAttachments++; continue; }
+        if (!allowedAttachments.has(part.mimeType || "") || !part.body || (part.body.size || 0) > maxAttachmentBytes || attachmentCount >= 20 || attachmentBytes + (part.body.size || 0) > 30000000) { skippedAttachments++; continue; }
         const body = part.body.attachmentId ? await gmailGet<{ data: string }>(`${endpoint}/messages/${encodeURIComponent(entry.id)}/attachments/${encodeURIComponent(part.body.attachmentId)}`, fresh.access_token) : part.body;
         const buffer = Buffer.from(body.data || "", "base64url");
-        if (!buffer.length || buffer.length > 10000000 || attachmentBytes + buffer.length > 30000000) { skippedAttachments++; continue; }
+        if (!buffer.length || buffer.length > maxAttachmentBytes || attachmentBytes + buffer.length > 30000000) { skippedAttachments++; continue; }
         attachmentBytes += buffer.length;
         attachmentCount++;
         const stored = await storagePut(`ingestion/${user.organizationId}/${trade.id}/${part.filename!.replace(/[^a-zA-Z0-9._-]/g, "_")}`, buffer, part.mimeType);
@@ -118,10 +133,10 @@ export async function syncGmail(user: User, input: { tradeId: number; query: str
     return { imported, duplicates, skippedAttachments, nextPageToken: listing.nextPageToken };
   } catch (error) {
     throw new TRPCError({ code: "BAD_GATEWAY", message: `${error instanceof Error ? error.message : "Gmail sync failed."} ${imported} new records retained; retry safely skips duplicates.` });
-  } finally { syncing.delete(user.id); }
+  } finally { syncing.delete(user.id); if (lease) await releaseRuntimeLease("gmail-sync", String(user.id), lease); }
 }
 export async function disconnectGmail(user: User) {
-  if (syncing.has(user.id)) throw new TRPCError({ code: "CONFLICT", message: "Wait for the current Gmail import to finish before disconnecting." });
+  if (syncing.has(user.id) || (databaseRuntimeEnabled() && await readRuntimeState("gmail-sync", String(user.id)))) throw new TRPCError({ code: "CONFLICT", message: "Wait for the current Gmail import to finish before disconnecting." });
   const token = await readGmailToken<Token>(user.id);
   if (token && token.organizationId !== user.organizationId) throw new TRPCError({ code: "FORBIDDEN", message: "Workspace mismatch." });
   let revoked = true;

@@ -13,16 +13,16 @@ beforeEach(() => {
   vi.stubEnv("GMAIL_CLIENT_ID", "fixture-client"); vi.stubEnv("GMAIL_CLIENT_SECRET", "fixture-secret"); vi.stubEnv("GMAIL_REDIRECT_URI", "http://localhost:3001/api/integrations/gmail/callback"); vi.stubEnv("INTEGRATION_ENCRYPTION_KEY", "a".repeat(64));
 });
 describe("Gmail connector", () => {
-  it("requests only read access and binds one-time state to the current user and workspace", () => {
-    const url = new URL(beginGmail(user).url);
+  it("requests only read access and binds one-time state to the current user and workspace", async () => {
+    const url = new URL((await beginGmail(user)).url);
     expect(url.origin).toBe("https://accounts.google.com");
     expect(url.searchParams.get("scope")).toBe("https://www.googleapis.com/auth/gmail.readonly");
     expect(url.searchParams.get("access_type")).toBe("offline");
     const state = url.searchParams.get("state")!;
-    expect(() => consumeGmailState(state, { ...user, id: 2 })).toThrow();
-    expect(() => consumeGmailState(state, { ...user, organizationId: 8 })).toThrow();
-    consumeGmailState(state, user);
-    expect(() => consumeGmailState(state, user)).toThrow();
+    await expect(consumeGmailState(state, { ...user, id: 2 })).rejects.toThrow();
+    await expect(consumeGmailState(state, { ...user, organizationId: 8 })).rejects.toThrow();
+    await consumeGmailState(state, user);
+    await expect(consumeGmailState(state, user)).rejects.toThrow();
   });
   it("does not import a mailbox into an unrelated trade", async () => {
     const network = vi.fn(); vi.stubGlobal("fetch", network);

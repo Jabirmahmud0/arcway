@@ -16,6 +16,14 @@ import {
 
 
 export const usersRoleEnum = pgEnum("users_role_enum", ["trader", "reviewer"]);
+export const appRuntimeState = pgTable("appRuntimeState", {
+  id: serial("id").primaryKey(),
+  namespace: varchar("namespace", { length: 64 }).notNull(),
+  key: varchar("key", { length: 512 }).notNull(),
+  value: json("value").notNull(),
+  expiresAt: timestamp("expiresAt", { withTimezone: true, mode: "date" }),
+  updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+}, table => [uniqueIndex("runtime_state_key_idx").on(table.namespace, table.key), index("runtime_state_expiry_idx").on(table.expiresAt)]);
 export const membershipsRoleEnum = pgEnum("memberships_role_enum", ["trader", "reviewer"]);
 export const tradesCommercialStateEnum = pgEnum("trades_commercial_state_enum", ["draft", "confirmed"]);
 export const tradesExecutionStateEnum = pgEnum("trades_execution_state_enum", ["not_started", "ready", "blocked"]);
