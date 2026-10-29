@@ -41,6 +41,7 @@ for (const [index, reference] of ['DEMO-COFFEE-001','DEMO-COFFEE-002','DEMO-COFF
   await store.updateDocumentUpload({documentId:document.id,userId:trader.id,fileName,fileKey:file.key,fileUrl:file.url,mimeType:'application/pdf',extractedData:extracted,inconsistencies:[]});
  }
  if(index===1) {
+  await db.update(schema.trades).set({partyKycState:'verified'}).where(eq(schema.trades.id,tradeId));
   await db.update(schema.tradeExceptions).set({status:'resolved'}).where(eq(schema.tradeExceptions.tradeId,tradeId));
   await db.update(schema.tradeObligations).set({status:'fulfilled'}).where(eq(schema.tradeObligations.tradeId,tradeId));
   for(const document of documents) await store.updateDocumentReview({documentId:document.id,reviewerId:reviewer.id,status:'verified',reviewerNotes:'Synthetic evidence reviewed for recruiter demonstration.'});
