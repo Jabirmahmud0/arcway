@@ -8,6 +8,7 @@
   "functions": {
     "api/index.js": {
       "maxDuration": 300,
+      "includeFiles": "node_modules/.pnpm/{@napi-rs+canvas*,pdfjs-dist*,pdf-parse*}/**",
       "excludeFiles": "{.data/**,.env,.env.*,docs/**,deploy/**,drizzle/postgresql/**}"
     }
   },
