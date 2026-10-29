@@ -17,3 +17,7 @@ Browser and Gmail attachment uploads are capped at 3 MB on Vercel so base64 tRPC
 Deploy using the existing linked project with `vercel --prod`, or push the repository's Vercel configuration to its connected Git branch. A frontend-only build is insufficient: the `/api/index.js` function and generated backend must also be deployed. Check `/`, a direct route such as `/trades`, `/api/health`, and protected API/download responses after deployment.
 
 Native PostgreSQL backups include the runtime table, so database-backed file/token state is captured in its exported snapshot. Keep the integration encryption key in your separate secret backup. Test restores in an isolated database before relying on a public deployment.
+
+Recruiter demo: sign in at /sign-in using the publicly displayed Reviewer or Trader credentials. Both use an isolated workspace of fictional coffee export scenarios. Records and edits are shared between visitors. The demo includes stored PDF bytes, extraction snapshots, document versions, conflicts, obligations, tasks, bookings, payment terms, comments, partner requests, policy and audit records. Provider connections require the visitor's own authorization; sample correspondence does not send email.
+
+To populate missing scenarios again, run `npx tsx scripts/seed-recruiter-demo.ts` with the portfolio Clerk test instance and Neon connection configured. This only creates missing DEMO references and does not reset existing edits. Never substitute private accounts for the public demo identities.

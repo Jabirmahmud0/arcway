@@ -864,6 +864,7 @@ export async function addOrganizationMembership(input: { organizationId: number;
   if (!db) throw new Error("Database unavailable");
   const user = (await db.select().from(users).where(eq(users.email, input.email)).limit(1))[0];
   if (!user) return null;
+  if (user.organizationId && user.organizationId !== input.organizationId) throw new Error("This user already belongs to another workspace.");
   const existing = (await db.select().from(memberships).where(and(eq(memberships.organizationId, input.organizationId), eq(memberships.userId, user.id))).limit(1))[0];
   if (existing) await db.update(memberships).set({ role: input.role }).where(eq(memberships.id, existing.id));
   else await db.insert(memberships).values({ organizationId: input.organizationId, userId: user.id, role: input.role });

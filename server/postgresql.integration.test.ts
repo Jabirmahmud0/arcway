@@ -564,3 +564,12 @@ it("retains Vercel file bytes and encrypted tokens across runtime reloads with o
     await vault.removeGmailToken(1); expect(await vault.readGmailToken(1)).toBeNull();
   } finally { vi.stubEnv("RUNTIME_STATE_BACKEND", ""); }
 });
+it("prevents a public demo reviewer from reassigning another tenant's identity", async () => {
+ const demo = await account();
+ await database.upsertUser({openId:"private-owner",email:"private@example.com",role:"reviewer"});
+ const owner = (await database.getUserByOpenId("private-owner"))!;
+ await expect(database.addOrganizationMembership({organizationId:demo.organizationId!,email:"private@example.com",role:"trader"})).rejects.toThrow("another workspace");
+ const unchanged = (await database.getUserByOpenId("private-owner"))!;
+ expect(unchanged.organizationId).toBe(owner.organizationId);
+ expect(unchanged.role).toBe("reviewer");
+});

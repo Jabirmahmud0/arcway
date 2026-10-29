@@ -1,7 +1,10 @@
 import { SignIn, SignUp } from "@clerk/react";
+import { DEMO_ACCOUNTS, DEMO_PASSWORD } from "@shared/demo";
+import { useState } from "react";
 import { Boxes, FileCheck2, ShieldCheck, ArrowUpRight } from "lucide-react";
 
 export default function SignInPage({ signUp = false }: { signUp?: boolean }) {
+  const [demoEmail, setDemoEmail] = useState(DEMO_ACCOUNTS[0].email as string);
   return (
     <div className="grid min-h-dvh bg-background text-slate-100 lg:grid-cols-2">
       <section className="hidden flex-col justify-between border-r border-white/10 bg-card p-12 lg:flex xl:p-16">
@@ -76,6 +79,15 @@ export default function SignInPage({ signUp = false }: { signUp?: boolean }) {
               : "Sign in to continue to your trade workspace."}
           </p>
         </div>
+        {!signUp && <div className="mb-6 w-full max-w-[400px] rounded-2xl border border-teal-300/25 bg-teal-300/5 p-5">
+          <p className="text-sm font-semibold text-teal-200">Recruiter demo</p>
+          <p className="mt-2 text-xs leading-5 text-slate-400">Explore a shared workspace with fictional trades, PDF evidence, and review scenarios. No signup needed. Changes are visible to other visitors.</p>
+          <div className="mt-4 flex gap-2">{DEMO_ACCOUNTS.map(account => <button key={account.role} onClick={() => setDemoEmail(account.email)} className={`rounded-lg border px-3 py-2 text-xs capitalize ${demoEmail === account.email ? "border-teal-300/50 bg-teal-300/15 text-teal-100" : "border-white/10 text-slate-400"}`}>{account.role}</button>)}</div>
+          <p className="mt-3 text-xs text-slate-400">{DEMO_ACCOUNTS.find(account => account.email === demoEmail)?.description}</p>
+          <label className="mt-4 block text-xs text-slate-400">Email<input aria-label="Demo email" readOnly value={demoEmail} onFocus={event => event.target.select()} className="mt-1 w-full rounded-lg border border-white/10 bg-background p-2 text-xs text-slate-100" /></label>
+          <label className="mt-3 block text-xs text-slate-400">Password<input aria-label="Demo password" readOnly value={DEMO_PASSWORD} onFocus={event => event.target.select()} className="mt-1 w-full rounded-lg border border-white/10 bg-background p-2 text-xs text-slate-100" /></label>
+          <p className="mt-3 text-xs leading-5 text-slate-400">Use these details below. If Clerk asks for a test email code, enter <strong className="text-slate-200">424242</strong>. Start with Trade Twins → DEMO-COFFEE-001 for discrepancies, then Document Workbench and Why Blocked. External provider signals are sample data; AI runs use the configured models.</p>
+        </div>}
         {signUp ? (
           <SignUp
             routing="hash"
@@ -85,6 +97,8 @@ export default function SignInPage({ signUp = false }: { signUp?: boolean }) {
           />
         ) : (
           <SignIn
+            key={demoEmail}
+            initialValues={{ emailAddress: demoEmail }}
             routing="hash"
             signUpUrl="/sign-up"
             fallbackRedirectUrl="/trades"
